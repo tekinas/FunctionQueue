@@ -12,7 +12,7 @@ using LockFreeQueue = FunctionQueue<true, true, ComputeFunctionSig>;
 
 int main(int argc, char **argv) {
     size_t const rawQueueMemSize =
-            [&] { return (argc >= 2) ? atof(argv[1]) : 10000 / 1024.0 / 1024.0; }() * 1024 * 1024;
+            [&] { return (argc >= 2) ? atof(argv[1]) : 3000 / 1024.0 / 1024.0; }() * 1024 * 1024;
 
     auto const rawQueueMem = std::make_unique<uint8_t[]>(rawQueueMemSize + 10);
     println("using buffer of size :", rawQueueMemSize);
@@ -30,7 +30,7 @@ int main(int argc, char **argv) {
 
     std::vector<size_t> result_vector;
     std::mutex result_mut;
-    std::vector<std::jthread> writer_threads;
+    std::vector<std::thread> writer_threads;
 
     for (auto t = num_threads; t--;)
         writer_threads.emplace_back([=, &rawComputeQueue] {
@@ -61,7 +61,8 @@ int main(int argc, char **argv) {
         }
     }
 
-    writer_threads.clear();
+    for (auto &&t:writer_threads)
+        t.join();
 
     println("result vector size : ", result_vector.size());
     print("sorting result vector .... ");

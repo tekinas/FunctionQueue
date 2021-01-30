@@ -1,4 +1,5 @@
 #include <thread>
+#include <string>
 
 #include "FunctionQueue.h"
 #include "util.h"
@@ -73,9 +74,12 @@ int main(int argc, char **argv) {
                 std::make_unique<ComputeCxt>(seed, functions, "compute chain " + std::to_string(t + 1)),
                 &rawComputeQueue);
 
-    std::vector<std::jthread> threads;
+    std::vector<std::thread> threads;
     for (auto t = num_threads; t--;)
         threads.emplace_back([&rawComputeQueue] {
             while (rawComputeQueue) rawComputeQueue.callAndPop();
         });
+
+    for (auto &&t:threads)
+        t.join();
 }

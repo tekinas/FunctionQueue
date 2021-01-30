@@ -1,4 +1,5 @@
 #include <thread>
+#include <string>
 
 #include "FunctionQueue.h"
 #include "util.h"
@@ -30,7 +31,7 @@ int main(int argc, char **argv) {
 
     std::vector<size_t> result_vector;
     std::mutex result_mut;
-    std::vector<std::jthread> reader_threads;
+    std::vector<std::thread> reader_threads;
 
     for (auto t = num_threads; t--;)
         reader_threads.emplace_back([&, str{"thread " + std::to_string(t + 1)}] {
@@ -68,7 +69,8 @@ int main(int argc, char **argv) {
             while (!rawComputeQueue.push_back([](auto) { return std::numeric_limits<size_t>::max(); }));
     }();
 
-    reader_threads.clear();
+    for (auto &&t:reader_threads)
+        t.join();
 
     println("result vector size : ", result_vector.size());
     print("sorting result vector .... ");
