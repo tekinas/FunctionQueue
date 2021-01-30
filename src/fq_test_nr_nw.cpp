@@ -63,7 +63,7 @@ int main(int argc, char **argv) {
     println("total num_threads :", num_threads);
 
     size_t const compute_chains = [&] {
-        return (argc >= 6) ? atol(argv[5]) : 10/*std::thread::hardware_concurrency()*/;
+        return (argc >= 6) ? atol(argv[5]) : 2/*std::thread::hardware_concurrency()*/;
     }();
     println("total compute chains :", compute_chains);
 

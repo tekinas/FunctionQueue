@@ -80,6 +80,8 @@ public:
         using Callable = std::decay_t<T>;
 //        static_assert(std::is_trivially_copyable_v<Callable>);
 
+        std::lock_guard lock{storage_mutex};
+
         auto const[fp_storage, callable_storage] = /*getCallableStorage(callable_align, callable_size);*/ getCallableStorage<Callable>();
 
         if constexpr(fixedSize)
@@ -98,7 +100,6 @@ public:
         new(callable_storage) Callable{std::forward<T>(function)};
 
         if constexpr (synced) {
-            m_RemainingFront.fetch_add(1, std::memory_order::release);
             m_Remaining.fetch_add(1, std::memory_order::release);
         } else {
             ++m_Remaining;
@@ -235,7 +236,7 @@ private:
             auto fp_offset = callable_cxt->fp_offset.load(std::memory_order_acquire);
 
             if (fp_offset == std::numeric_limits<uint32_t>::max()) {
-                callable_cxt = align<CallableCxt>(m_CallableQueueMemory);
+                callable_cxt = std::launder(align<CallableCxt>(m_CallableQueueMemory));
                 fp_offset = callable_cxt->fp_offset.load(std::memory_order_acquire);
             }
 
@@ -243,21 +244,20 @@ private:
                              reinterpret_cast<std::byte *>(callable_cxt) + callable_cxt->stride};
         };
 
-        std::byte *outPtr = m_OutPosStart.load(std::memory_order::relaxed);
-        size_t rem = m_RemainingFront.load(std::memory_order::relaxed);
+        std::byte *outPtr = m_OutPosStart.load(/*std::memory_order::relaxed*/);
+        size_t rem = m_RemainingFront.load(/*std::memory_order::relaxed*/);
         for (auto[advance, nextOutPos] = check_pos(outPtr);
-             advance && rem; std::tie(advance, nextOutPos) = check_pos(outPtr)) {
+             advance && (rem = m_RemainingFront.load(/*std::memory_order::relaxed*/));
+             std::tie(advance, nextOutPos) = check_pos(outPtr)) {
             assert(outPtr != nextOutPos);
-            if (m_OutPosStart.compare_exchange_strong(outPtr, nextOutPos, std::memory_order_relaxed,
-                                                      std::memory_order_relaxed)) {
+            if (m_OutPosStart.compare_exchange_strong(outPtr, nextOutPos/*, std::memory_order_relaxed,
+                                                      std::memory_order_relaxed*/)) {
                 outPtr = nextOutPos;
-                auto prev_rem = m_RemainingFront.fetch_sub(1, std::memory_order::relaxed);
-                rem = prev_rem - 1;
-                if (!rem) {
+                auto prev_rem = m_RemainingFront.fetch_sub(1/*, std::memory_order_relaxed*/);
+                if (prev_rem == 1) {
+                    rem = 0;
                     break;
-                } else if (prev_rem == 0) {
-                    printf("fucked up !!!\n");
-                }
+                } else if (!prev_rem) printf("fucked up %lu \n", m_RemainingFront.load());
             }
         }
 
@@ -312,6 +312,10 @@ private:
             auto callable_cxt = align<CallableCxt>(input_pos);
             callable_cxt->fp_offset = std::numeric_limits<uint32_t>::max();
         }
+
+        m_RemainingFront.fetch_add(1, std::memory_order::release);
+
+//        printf("offset : %lu\n", static_cast<std::byte *>(storage.first) - m_CallableQueueMemory);
 
         return storage;
     }
@@ -496,6 +500,8 @@ private:
         uint16_t stride{};
         uint16_t callable_offset{};
     };
+
+    std::mutex storage_mutex;
 };
 
 #endif //CPP_PROJECT_FUNCTIONQUEUE2_H

@@ -23,13 +23,12 @@ int main(int argc, char **argv) {
     size_t const functions = [&] { return (argc >= 4) ? atol(argv[3]) : 12639182; }();
     println("total functions :", functions);
 
-    size_t const num_threads = [&] { return (argc >= 5) ? atol(argv[4]) : 1/*std::thread::hardware_concurrency()*/; }();
+    size_t const num_threads = [&] { return (argc >= 5) ? atol(argv[4]) : 5/*std::thread::hardware_concurrency()*/; }();
     println("total num_threads :", num_threads);
 
     FunctionQueue<true, true, ComputeFunctionSig> rawComputeQueue{rawQueueMem.get(), rawQueueMemSize};
 
     std::vector<size_t> result_vector;
-    std::mutex result_mut;
     std::vector<std::thread> writer_threads;
 
     for (auto t = num_threads; t--;)
