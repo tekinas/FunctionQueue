@@ -10,6 +10,7 @@ add_executable(fq_test_1r_1w src/fq_test_1r_1w.cpp)
 add_executable(fq_test_nr_nw src/fq_test_nr_nw.cpp)
 add_executable(fq_test_nr_1w src/fq_test_nr_1w.cpp)
 add_executable(fq_test_1r_nw src/fq_test_1r_nw.cpp)
+add_executable(fq_test_sync_only src/fq_test_sync_only.cpp)
 
 if (WIN32)
     set(LIB_DIR "C:/Users/Aniket Bisht/Documents/Libraries/Windows")  # set the library directory for Windows ::::
@@ -29,4 +30,5 @@ if (MINGW OR UNIX)
     target_link_libraries(fq_test_nr_nw PRIVATE pthread)
     target_link_libraries(fq_test_nr_1w PRIVATE pthread)
     target_link_libraries(fq_test_1r_nw PRIVATE pthread)
+    target_link_libraries(fq_test_sync_only PRIVATE pthread atomic)
 endif ()

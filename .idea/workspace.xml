@@ -7,6 +7,7 @@
       <config projectName="FunctionQueue" targetName="fq_test_callNDelete" />
       <config projectName="FunctionQueue" targetName="fq_test_1r_nw" />
       <config projectName="FunctionQueue" targetName="fq_test_call_only" />
+      <config projectName="FunctionQueue" targetName="fq_test_sync_only" />
       <config projectName="FunctionQueue" targetName="fq_test_nr_nw" />
     </generated>
   </component>
@@ -19,9 +20,7 @@
   <component name="ChangeListManager">
     <list default="true" id="208b6fd8-6760-4f44-bd15-2f487cfe8997" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/FunctionQueue.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/FunctionQueue.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/fq_test_1r_nw.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/fq_test_1r_nw.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/fq_test_nr_nw.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/fq_test_nr_nw.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/CMakeLists.txt" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -31,7 +30,7 @@
   <component name="ClangdSettings">
     <option name="formatViaClangd" value="false" />
   </component>
-  <component name="ExecutionTargetManager" SELECTED_TARGET="CMakeBuildProfile:Release" />
+  <component name="ExecutionTargetManager" SELECTED_TARGET="CMakeBuildProfile:Debug" />
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
@@ -52,10 +51,10 @@
     <property name="restartRequiresConfirmation" value="false" />
     <property name="settings.editor.selected.configurable" value="CPPToolchains" />
   </component>
-  <component name="RunManager" selected="CMake Application.fq_test_1r_nw">
-    <configuration default="true" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" PASS_PARENT_ENVS_2="true">
+  <component name="RunManager" selected="CMake Application.fq_test_1r_1w">
+    <configuration default="true" type="CLionExternalRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" PASS_PARENT_ENVS_2="true">
       <method v="2">
-        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+        <option name="CLION.EXTERNAL.BUILD" enabled="true" />
       </method>
     </configuration>
     <configuration name="fq_test_1r_1w" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="FunctionQueue" TARGET_NAME="fq_test_1r_1w" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="FunctionQueue" RUN_TARGET_NAME="fq_test_1r_1w">
@@ -88,6 +87,11 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
+    <configuration name="fq_test_sync_only" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="FunctionQueue" TARGET_NAME="fq_test_sync_only" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="FunctionQueue" RUN_TARGET_NAME="fq_test_sync_only">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
     <configuration default="true" type="GradleAppRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" PASS_PARENT_ENVS_2="true">
       <method v="2">
         <option name="com.jetbrains.cidr.cpp.gradle.execution.GradleNativeBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
@@ -100,6 +104,7 @@
       <item itemvalue="CMake Application.fq_test_callNDelete" />
       <item itemvalue="CMake Application.fq_test_nr_1w" />
       <item itemvalue="CMake Application.fq_test_nr_nw" />
+      <item itemvalue="CMake Application.fq_test_sync_only" />
     </list>
   </component>
   <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
@@ -118,6 +123,12 @@
       <workItem from="1612012216375" duration="764000" />
       <workItem from="1612015550665" duration="2822000" />
       <workItem from="1612038734421" duration="4896000" />
+      <workItem from="1612766016622" duration="20927000" />
+      <workItem from="1612802036904" duration="2420000" />
+      <workItem from="1612840463948" duration="10581000" />
+      <workItem from="1612891427933" duration="1362000" />
+      <workItem from="1612976773729" duration="758000" />
+      <workItem from="1613120247283" duration="2714000" />
     </task>
     <servers />
   </component>
