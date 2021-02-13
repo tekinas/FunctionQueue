@@ -38,8 +38,8 @@ private:
     size_t const m_MemorySize;
 
 //    std::vector<uint32_t> readOffsets, writeOffsets, followOffsets;
-    uint32_t readIndex{0}, followIndex{0};
-    FILE *readLogFile, *followLogFile;
+//    uint32_t readIndex{0}, followIndex{0};
+//    FILE *readLogFile, *followLogFile;
 
     using Storage = std::pair<void *, void *>;
     using AtomicFunctionCxt = std::atomic<FunctionCxt>;
@@ -161,9 +161,9 @@ private:
                 out_pos = m_Memory;
             } else if (functionCxt.fp_offset == 0) {
 //                followOffsets.push_back(std::distance(m_Memory, reinterpret_cast<std::byte *>(functionCxtPtr)));
-                fprintf(followLogFile, "[%u] %u %u %u\n", followIndex++,
-                        std::distance(m_Memory, reinterpret_cast<std::byte *>(functionCxtPtr)), functionCxt.obj_offset,
-                        functionCxt.stride);
+//                fprintf(followLogFile, "[%u] %u %u %u\n", followIndex++,
+//                        std::distance(m_Memory, reinterpret_cast<std::byte *>(functionCxtPtr)), functionCxt.obj_offset,
+//                        functionCxt.stride);
                 out_pos = reinterpret_cast<std::byte *>(functionCxtPtr) + functionCxt.stride;
                 ++cleaned;
             } else {
@@ -187,8 +187,8 @@ public:
         m_InputPos = m_OutPosRead = m_OutPosFollow = m_Memory;
         memset(m_Memory, 0, m_MemorySize);
 
-        readLogFile = fopen("./readLog.txt", "w");
-        followLogFile = fopen("./followLog.txt", "w");
+//        readLogFile = fopen("./readLog.txt", "w");
+//        followLogFile = fopen("./followLog.txt", "w");
     }
 
     explicit operator bool() {
@@ -216,9 +216,9 @@ public:
         auto const functionCxt = functionCxtPtr->load();
 
 //        readOffsets.push_back(std::distance(m_Memory, reinterpret_cast<std::byte *>(functionCxtPtr)));
-        fprintf(readLogFile, "[%u] %u %u %u\n", readIndex++,
-                std::distance(m_Memory, reinterpret_cast<std::byte *>(functionCxtPtr)), functionCxt.obj_offset,
-                functionCxt.stride);
+//        fprintf(readLogFile, "[%u] %u %u %u\n", readIndex++,
+//                std::distance(m_Memory, reinterpret_cast<std::byte *>(functionCxtPtr)), functionCxt.obj_offset,
+//                functionCxt.stride);
 
         if constexpr (std::is_same_v<R, void>) {
             reinterpret_cast<InvokeAndDestroy>(fp_base + functionCxt.fp_offset)(

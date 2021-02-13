@@ -24,7 +24,7 @@ int main(int argc, char **argv) {
     println("total writer threads :", numWriterThreads);
 
     size_t const numReaderThreads = [&] {
-        return (argc >= 5) ? atol(argv[4]) : 1/*std::thread::hardware_concurrency()*/;
+        return (argc >= 5) ? atol(argv[4]) : std::thread::hardware_concurrency();
     }();
     println("total reader threads :", numReaderThreads);
 
