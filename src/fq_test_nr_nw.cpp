@@ -1,7 +1,7 @@
 #include <thread>
 #include <string>
 
-#include "FunctionQueue.h"
+#include "SyncFuctionQueue.h"
 #include "util.h"
 #include "ComputeCallbackGenerator.h"
 
@@ -9,7 +9,7 @@
 using namespace util;
 
 using ComputeFunctionSig = void();
-using LockFreeQueue = FunctionQueue<true, true, ComputeFunctionSig>;
+using LockFreeQueue = SyncFunctionQueue</*true, true, */ComputeFunctionSig>;
 
 void test_lockFreeQueue(LockFreeQueue &rawComputeQueue, CallbackGenerator &callbackGenerator, size_t functions);
 
@@ -63,11 +63,11 @@ int main(int argc, char **argv) {
     println("total num_threads :", num_threads);
 
     size_t const compute_chains = [&] {
-        return (argc >= 6) ? atol(argv[5]) : 2/*std::thread::hardware_concurrency()*/;
+        return (argc >= 6) ? atol(argv[5]) : 5/*std::thread::hardware_concurrency()*/;
     }();
     println("total compute chains :", compute_chains);
 
-    FunctionQueue<true, true, ComputeFunctionSig> rawComputeQueue{rawQueueMem.get(), rawQueueMemSize};
+    LockFreeQueue rawComputeQueue{rawQueueMem.get(), rawQueueMemSize};
 
     for (auto t = compute_chains; t--;)
         ComputeCxt::addComputeTask(

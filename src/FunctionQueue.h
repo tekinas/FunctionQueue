@@ -409,7 +409,7 @@ private:
             return {fp_storage, callable_storage};
         };
 
-        bool const search_ahead = (m_InputPos > m_OutPosReadCurrent) || (m_InputPos == m_OutPosReadCurrent && !m_Remaining);
+        bool const search_ahead = (m_InputPos > m_OutPosReadCurrent) || (m_InputPos == m_OutPosReadCurrent && !m_RemainingRead);
         if (size_t const buffer_size = m_CallableQueueMemory + m_CallableQueueMemorySize - m_InputPos;
                 search_ahead && buffer_size) {
             auto[fp_storage, callable_storage] = getAlignedStorage(m_InputPos, buffer_size);
@@ -438,7 +438,7 @@ private:
             void *const newQueueMem = m_MemoryResource->allocate(newQueueSize, alignof(CallableCxt));
 
             /// trivially relocating callables into new queue memory ****************
-            if (m_Remaining && m_OutPosReadCurrent >= m_InputPos) {
+            if (m_RemainingRead && m_OutPosReadCurrent >= m_InputPos) {
                 size_t const rightMemSize = m_OutPutEndPos - m_OutPosReadCurrent;
                 std::memcpy(newQueueMem, m_OutPosReadCurrent, rightMemSize);
 

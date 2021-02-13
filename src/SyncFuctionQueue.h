@@ -25,17 +25,21 @@ private:
     };
 
     std::atomic<std::byte *> m_OutPosRead;
-    std::atomic<size_t> m_Remaining;
+    std::atomic<size_t> m_RemainingRead;
 
     std::atomic<std::byte *> m_InputPos;
     std::atomic<std::byte *> m_OutPosFollow;
     std::atomic<size_t> m_RemainingClean;
+    std::atomic<size_t> m_Remaining;
+
     std::mutex outPosMut;
 
     std::byte *const m_Memory;
     size_t const m_MemorySize;
 
-    std::vector<uint32_t> readOffsets, writeOffsets, followOffsets;
+//    std::vector<uint32_t> readOffsets, writeOffsets, followOffsets;
+    uint32_t readIndex{0}, followIndex{0};
+    FILE *readLogFile, *followLogFile;
 
     using Storage = std::pair<void *, void *>;
     using AtomicFunctionCxt = std::atomic<FunctionCxt>;
@@ -102,12 +106,8 @@ private:
             input_pos = m_InputPos.load();
             auto const out_pos = checkNAdvanceOutPos();
 
-            if (out_pos == input_pos) {
-                auto fp_offset = std::launder(align<AtomicFunctionCxt>(out_pos))->load().fp_offset;
-                if (fp_offset != 0) {
-                    printf("fp_offset : %u, pos : %u\n", fp_offset, std::distance(m_Memory, out_pos));
-                    return {nullptr, nullptr};
-                }
+            if (out_pos == input_pos && m_Remaining.load()) {
+                return {nullptr, nullptr};
             }
 
             search_ahead = input_pos >= out_pos;
@@ -160,7 +160,10 @@ private:
             if (functionCxt.fp_offset == std::numeric_limits<uint32_t>::max()) {
                 out_pos = m_Memory;
             } else if (functionCxt.fp_offset == 0) {
-                followOffsets.push_back(std::distance(m_Memory, out_pos));
+//                followOffsets.push_back(std::distance(m_Memory, reinterpret_cast<std::byte *>(functionCxtPtr)));
+                fprintf(followLogFile, "[%u] %u %u %u\n", followIndex++,
+                        std::distance(m_Memory, reinterpret_cast<std::byte *>(functionCxtPtr)), functionCxt.obj_offset,
+                        functionCxt.stride);
                 out_pos = reinterpret_cast<std::byte *>(functionCxtPtr) + functionCxt.stride;
                 ++cleaned;
             } else {
@@ -170,6 +173,7 @@ private:
 
         if (cleaned) {
             m_RemainingClean.fetch_sub(cleaned);
+            m_Remaining.fetch_sub(cleaned);
         }
         m_OutPosFollow.store(out_pos);
 
@@ -179,16 +183,19 @@ private:
 
 public:
     SyncFunctionQueue(void *mem, size_t size) : m_Memory{static_cast<std::byte *const>(mem)}, m_MemorySize{size},
-                                                m_Remaining{0} {
+                                                m_RemainingRead{0}, m_Remaining{0}, m_RemainingClean{0} {
         m_InputPos = m_OutPosRead = m_OutPosFollow = m_Memory;
         memset(m_Memory, 0, m_MemorySize);
+
+        readLogFile = fopen("./readLog.txt", "w");
+        followLogFile = fopen("./followLog.txt", "w");
     }
 
     explicit operator bool() {
-        size_t rem = m_Remaining.load();
+        size_t rem = m_RemainingRead.load();
         if (!rem) return false;
 
-        while (rem && !m_Remaining.compare_exchange_weak(rem, rem - 1));
+        while (rem && !m_RemainingRead.compare_exchange_strong(rem, rem - 1));
         return rem;
     }
 
@@ -203,29 +210,29 @@ public:
                 functionCxtPtr = std::launder(align<AtomicFunctionCxt>(m_Memory));
             }
 
-            printf("offset : %d, stride : %d\n", std::distance(m_Memory, reinterpret_cast<std::byte *>(functionCxtPtr)),
-                   functionCxtPtr->load().stride);
-
             return reinterpret_cast<std::byte *>(functionCxtPtr) + functionCxtPtr->load().stride;
         }()));
 
-        readOffsets.push_back(std::distance(m_Memory, reinterpret_cast<std::byte *>(functionCxtPtr)));
-
         auto const functionCxt = functionCxtPtr->load();
+
+//        readOffsets.push_back(std::distance(m_Memory, reinterpret_cast<std::byte *>(functionCxtPtr)));
+        fprintf(readLogFile, "[%u] %u %u %u\n", readIndex++,
+                std::distance(m_Memory, reinterpret_cast<std::byte *>(functionCxtPtr)), functionCxt.obj_offset,
+                functionCxt.stride);
 
         if constexpr (std::is_same_v<R, void>) {
             reinterpret_cast<InvokeAndDestroy>(fp_base + functionCxt.fp_offset)(
                     reinterpret_cast<std::byte *>(functionCxtPtr) + functionCxt.obj_offset, args...);
 
             functionCxtPtr->store({0, functionCxt.obj_offset, functionCxt.stride});
-            m_RemainingClean.fetch_add(1, std::memory_order::release);
+            m_RemainingClean.fetch_add(1);
 
         } else {
             auto &&result = reinterpret_cast<InvokeAndDestroy>(fp_base + functionCxt.fp_offset)(
                     reinterpret_cast<std::byte *>(functionCxtPtr) + functionCxt.obj_offset, args...);
 
             functionCxtPtr->store({0, functionCxt.obj_offset, functionCxt.stride});
-            m_RemainingClean.fetch_add(1, std::memory_order::release);
+            m_RemainingClean.fetch_add(1);
 
             return std::move(result);
         }
@@ -242,7 +249,7 @@ public:
         if (!fp_storage || !callable_storage)
             return false;
 
-        writeOffsets.push_back(std::distance(m_Memory, reinterpret_cast<std::byte *>(fp_storage)));
+//        writeOffsets.push_back(std::distance(m_Memory, reinterpret_cast<std::byte *>(fp_storage)));
 
         auto const obj_ptr = std::launder(new(callable_storage) Callable{std::forward<T>(function)});
         std::launder(new(fp_storage) AtomicFunctionCxt{})->store(
@@ -254,9 +261,20 @@ public:
                          sizeof(Callable))
                 });
 
-        m_Remaining.fetch_add(1, std::memory_order::release);
+        m_Remaining.fetch_add(1);
+        m_RemainingRead.fetch_add(1);
+
 
         return true;
+    }
+
+    [[nodiscard]] size_t storage_used() const noexcept {
+        auto input_pos = m_InputPos.load();
+        auto out_pos = m_OutPosRead.load();
+        if (input_pos > out_pos) return input_pos - out_pos;
+        else if (input_pos == out_pos) return m_Remaining.load() ? m_MemorySize : 0;
+        else
+            return m_MemorySize - (out_pos - input_pos);
     }
 
 };

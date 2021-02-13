@@ -1,6 +1,6 @@
 #include <thread>
 
-#include "FunctionQueue.h"
+#include "SyncFuctionQueue.h"
 #include "util.h"
 #include "ComputeCallbackGenerator.h"
 
@@ -8,11 +8,11 @@
 using namespace util;
 
 using ComputeFunctionSig = size_t(size_t);
-using LockFreeQueue = FunctionQueue<true, true, ComputeFunctionSig>;
+using LockFreeQueue = SyncFunctionQueue</*true, true,*/ ComputeFunctionSig>;
 
 int main(int argc, char **argv) {
     size_t const rawQueueMemSize =
-            [&] { return (argc >= 2) ? atof(argv[1]) : 3000 / 1024.0 / 1024.0; }() * 1024 * 1024;
+            [&] { return (argc >= 2) ? atof(argv[1]) : 1000 / 1024.0 / 1024.0; }() * 1024 * 1024;
 
     auto const rawQueueMem = std::make_unique<uint8_t[]>(rawQueueMemSize + 10);
     println("using buffer of size :", rawQueueMemSize);
@@ -23,10 +23,10 @@ int main(int argc, char **argv) {
     size_t const functions = [&] { return (argc >= 4) ? atol(argv[3]) : 12639182; }();
     println("total functions :", functions);
 
-    size_t const num_threads = [&] { return (argc >= 5) ? atol(argv[4]) : 5/*std::thread::hardware_concurrency()*/; }();
+    size_t const num_threads = [&] { return (argc >= 5) ? atol(argv[4]) : 2/*std::thread::hardware_concurrency()*/; }();
     println("total num_threads :", num_threads);
 
-    FunctionQueue<true, true, ComputeFunctionSig> rawComputeQueue{rawQueueMem.get(), rawQueueMemSize};
+    LockFreeQueue rawComputeQueue{rawQueueMem.get(), rawQueueMemSize};
 
     std::vector<size_t> result_vector;
     std::vector<std::thread> writer_threads;
@@ -55,6 +55,7 @@ int main(int argc, char **argv) {
         while (threads) {
             while (!rawComputeQueue) std::this_thread::yield();
             auto const res = rawComputeQueue.callAndPop(seed);
+            printf("%lu\n", res);
             if (res == std::numeric_limits<size_t>::max()) --threads;
             else result_vector.push_back(res);
         }
