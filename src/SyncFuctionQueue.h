@@ -3,10 +3,9 @@
 
 #include <atomic>
 #include <type_traits>
-#include <cstddef>
-#include <cmath>
 #include <tuple>
 #include <cstring>
+#include <cassert>
 #include <mutex>
 #include <vector>
 
@@ -32,14 +31,10 @@ private:
     std::atomic<size_t> m_RemainingClean;
     std::atomic<size_t> m_Remaining;
 
-    std::mutex outPosMut;
+    std::mutex outPosMut, input_mut;
 
     std::byte *const m_Memory;
     size_t const m_MemorySize;
-
-//    std::vector<uint32_t> readOffsets, writeOffsets, followOffsets;
-//    uint32_t readIndex{0}, followIndex{0};
-//    FILE *readLogFile, *followLogFile;
 
     using Storage = std::pair<void *, void *>;
     using AtomicFunctionCxt = std::atomic<FunctionCxt>;
@@ -139,6 +134,7 @@ private:
                     {std::numeric_limits<uint32_t>::max(), 0, 0});
         }
 
+        std::lock_guard lock{input_mut};
 
         return storage;
     }
@@ -160,10 +156,8 @@ private:
             if (functionCxt.fp_offset == std::numeric_limits<uint32_t>::max()) {
                 out_pos = m_Memory;
             } else if (functionCxt.fp_offset == 0) {
-//                followOffsets.push_back(std::distance(m_Memory, reinterpret_cast<std::byte *>(functionCxtPtr)));
-//                fprintf(followLogFile, "[%u] %u %u %u\n", followIndex++,
-//                        std::distance(m_Memory, reinterpret_cast<std::byte *>(functionCxtPtr)), functionCxt.obj_offset,
-//                        functionCxt.stride);
+                assert(functionCxt.stride);
+
                 out_pos = reinterpret_cast<std::byte *>(functionCxtPtr) + functionCxt.stride;
                 ++cleaned;
             } else {
@@ -172,6 +166,7 @@ private:
         }
 
         if (cleaned) {
+            assert(cleaned <= rem);
             m_RemainingClean.fetch_sub(cleaned);
             m_Remaining.fetch_sub(cleaned);
         }
@@ -215,11 +210,6 @@ public:
 
         auto const functionCxt = functionCxtPtr->load();
 
-//        readOffsets.push_back(std::distance(m_Memory, reinterpret_cast<std::byte *>(functionCxtPtr)));
-//        fprintf(readLogFile, "[%u] %u %u %u\n", readIndex++,
-//                std::distance(m_Memory, reinterpret_cast<std::byte *>(functionCxtPtr)), functionCxt.obj_offset,
-//                functionCxt.stride);
-
         if constexpr (std::is_same_v<R, void>) {
             reinterpret_cast<InvokeAndDestroy>(fp_base + functionCxt.fp_offset)(
                     reinterpret_cast<std::byte *>(functionCxtPtr) + functionCxt.obj_offset, args...);
@@ -249,8 +239,6 @@ public:
         if (!fp_storage || !callable_storage)
             return false;
 
-//        writeOffsets.push_back(std::distance(m_Memory, reinterpret_cast<std::byte *>(fp_storage)));
-
         auto const obj_ptr = std::launder(new(callable_storage) Callable{std::forward<T>(function)});
         std::launder(new(fp_storage) AtomicFunctionCxt{})->store(
                 {static_cast<uint32_t>(reinterpret_cast<uintptr_t>(&invoke<Callable> ) - fp_base),
@@ -263,7 +251,6 @@ public:
 
         m_Remaining.fetch_add(1);
         m_RemainingRead.fetch_add(1);
-
 
         return true;
     }

@@ -20,7 +20,7 @@ int main(int argc, char **argv) {
     size_t const seed = [&] { return (argc >= 3) ? atol(argv[2]) : 100; }();
     println("using seed :", seed);
 
-    size_t const numWriterThreads = [&] { return (argc >= 4) ? atol(argv[4]) : std::thread::hardware_concurrency(); }();
+    size_t const numWriterThreads = [&] { return (argc >= 4) ? atol(argv[3]) : std::thread::hardware_concurrency(); }();
     println("total writer threads :", numWriterThreads);
 
     size_t const numReaderThreads = [&] {
