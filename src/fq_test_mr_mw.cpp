@@ -1,6 +1,7 @@
 #include <thread>
 
 #include "SyncFuctionQueue.h"
+#include "MRMW_FunctionQueue.h"
 #include "util.h"
 #include "ComputeCallbackGenerator.h"
 
