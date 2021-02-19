@@ -1,6 +1,7 @@
 #include <thread>
 
 #include "MRMW_FunctionQueue.h"
+#include "FunctionQueue.h"
 #include "util.h"
 #include "ComputeCallbackGenerator.h"
 
@@ -17,7 +18,7 @@ int main(int argc, char **argv) {
     auto const rawQueueMem = std::make_unique<uint8_t[]>(rawQueueMemSize + 10);
     println("using buffer of size :", rawQueueMemSize);
 
-    size_t const seed = [&] { return (argc >= 3) ? atol(argv[2]) : 23423; }();
+    size_t const seed = [&] { return (argc >= 3) ? atol(argv[2]) : 100; }();
     println("using seed :", seed);
 
     size_t const functions = [&] { return (argc >= 4) ? atol(argv[3]) : 12639182; }();
@@ -55,7 +56,7 @@ int main(int argc, char **argv) {
         while (threads) {
             while (!rawComputeQueue) std::this_thread::yield();
             auto const res = rawComputeQueue.callAndPop(seed);
-//            printf("%lu\n", res);
+            printf("%lu\n", res);
             if (res == std::numeric_limits<size_t>::max()) --threads;
             else result_vector.push_back(res);
         }
