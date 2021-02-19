@@ -181,9 +181,6 @@ public:
                                                 m_RemainingRead{0}, m_Remaining{0}, m_RemainingClean{0} {
         m_InputPos = m_OutPosRead = m_OutPosFollow = m_Memory;
         memset(m_Memory, 0, m_MemorySize);
-
-//        readLogFile = fopen("./readLog.txt", "w");
-//        followLogFile = fopen("./followLog.txt", "w");
     }
 
     explicit operator bool() {
@@ -232,8 +229,7 @@ public:
     bool push_back(T &&function) noexcept {
         using Callable = std::decay_t<T>;
 
-        auto const[fp_storage, callable_storage] = /*getCallableStorage(callable_align, callable_size);*/
-        getCallableStorage<Callable>();
+        auto const[fp_storage, callable_storage] = getCallableStorage<Callable>();
 
 
         if (!fp_storage || !callable_storage)
@@ -260,8 +256,7 @@ public:
         auto out_pos = m_OutPosRead.load();
         if (input_pos > out_pos) return input_pos - out_pos;
         else if (input_pos == out_pos) return m_Remaining.load() ? m_MemorySize : 0;
-        else
-            return m_MemorySize - (out_pos - input_pos);
+        else return m_MemorySize - (out_pos - input_pos);
     }
 
 };

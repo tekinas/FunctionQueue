@@ -25,13 +25,13 @@ template<typename R, typename ...Args>
 class MRMW_FunctionQueue<R(Args...)> {
 private:
     struct MemCxt {
-        uint32_t offset: 23;
-        uint32_t size: 9;
+        uint32_t offset/*: 23*/ {};
+        uint32_t size/*: 9*/ {};
     };
 
     struct FunctionCxt {
-        uint32_t fp_offset;
-        MemCxt obj;
+        uint32_t fp_offset{};
+        MemCxt obj{};
     };
 
     std::atomic<size_t> m_RemainingRead;
@@ -48,8 +48,6 @@ private:
 
     std::byte *const m_Memory;
     size_t const m_MemorySize;
-
-    using Storage = std::pair<void *, void *>;
 
     template<typename Callable>
     static R invoke(void *data, Args... args) {
@@ -95,14 +93,12 @@ private:
     }
 
     template<typename Callable>
-    Storage getCallableStorage() noexcept {
-        auto getAlignedStorage = [](void *buffer, size_t size) noexcept -> Storage {
-            auto const callable_storage = align<Callable>(buffer, size);
-            return {fp_storage, callable_storage};
+    MemCxt getCallableStorage() noexcept {
+        auto getAlignedStorage = [](void *buffer, size_t size) noexcept {
+            return static_cast<std::byte *>(align<Callable>(buffer, size));
         };
 
-        Storage storage{nullptr, nullptr};
-
+        MemCxt memCxt;
         std::byte *input_pos;
 
         bool search_ahead;
@@ -111,16 +107,19 @@ private:
             auto const out_pos = checkNAdvanceOutPos();
 
             if (out_pos == input_pos && m_Remaining.load()) {
-                return {nullptr, nullptr};
+                return {};
             }
 
             search_ahead = input_pos >= out_pos;
 
-            if (size_t const buffer_size = m_Memory + m_MemorySize - input_pos;
-                    search_ahead && buffer_size) {
-                storage = getAlignedStorage(input_pos, buffer_size);
-                if (storage.first && storage.second) {
+            if (size_t const buffer_size = m_Memory + m_MemorySize - input_pos; search_ahead && buffer_size) {
+                auto obj_buff = getAlignedStorage(input_pos, buffer_size);
+                if (obj_buff) {
                     search_ahead = false;
+                    memCxt = {static_cast<uint32_t>(std::distance(m_Memory, input_pos)),
+                              static_cast<uint32_t>(obj_buff - input_pos + sizeof(Callable))};
+                    printf("input : %u %u\n", memCxt.offset, memCxt.size);
+
                     continue;
                 }
             }
@@ -128,24 +127,23 @@ private:
             {
                 auto const mem = search_ahead ? m_Memory : input_pos;
                 if (size_t const buffer_size = out_pos - mem) {
-                    storage = getAlignedStorage(mem, buffer_size);
+                    auto obj_buff = getAlignedStorage(mem, buffer_size);
+                    if (obj_buff) {
+                        memCxt = {static_cast<uint32_t>(std::distance(m_Memory, mem)),
+                                  static_cast<uint32_t>(obj_buff - mem + sizeof(Callable))};
+                        printf("input : %u %u\n", memCxt.offset, memCxt.size);
+                    } else return {};
                 }
             }
 
-            if (!storage.first || !storage.second)
-                return {nullptr, nullptr};
-
-        } while (!m_InputPos.compare_exchange_weak(input_pos,
-                                                   static_cast<std::byte *>(storage.second) + sizeof(Callable)));
+        } while (!m_InputPos.compare_exchange_weak(input_pos, m_Memory + memCxt.offset + memCxt.size));
 
         if (search_ahead) {
-            std::launder(new(align<AtomicFunctionCxt>(input_pos)) AtomicFunctionCxt{})->store(
-                    {std::numeric_limits<uint32_t>::max(), 0, 0});
+            std::lock_guard lock{freePtrSetMut};
+            m_FreePtrSet[std::distance(m_Memory, input_pos)] = 0;
         }
 
-        std::lock_guard lock{input_mut};
-
-        return storage;
+        return memCxt;
     }
 
     std::byte *checkNAdvanceOutPos() noexcept {
@@ -161,11 +159,14 @@ private:
         auto cleaned = 0;
         for (; cleaned != rem;) {
             std::lock_guard lock{freePtrSetMut};
+
             auto const stride_iter = m_FreePtrSet.find(std::distance(m_Memory, out_pos));
             if (stride_iter == m_FreePtrSet.end()) break;
             else if (stride_iter->second) {
-                out_pos = m_Memory + stride_iter->second;
+                out_pos += stride_iter->second;
                 ++cleaned;
+                assert(out_pos == (m_Memory + stride_iter->first + stride_iter->second));
+                printf("cleaned : %u %u\n", stride_iter->first, stride_iter->second);
             } else {
                 out_pos = m_Memory;
             }
@@ -190,10 +191,10 @@ public:
     MRMW_FunctionQueue(void *mem, size_t size) : m_Memory{static_cast<std::byte *const>(mem)}, m_MemorySize{size},
                                                  m_RemainingRead{0}, m_Remaining{0}, m_RemainingClean{0} {
         m_InputPos = m_OutPosFollow = m_Memory;
-        memset(m_Memory, 0, m_MemorySize);
+        printf("init input :%u\n", std::distance(m_Memory, m_InputPos.load()));
+        printf("init output :%u\n", std::distance(m_Memory, m_OutPosFollow.load()));
 
-//        readLogFile = fopen("./readLog.txt", "w");
-//        followLogFile = fopen("./followLog.txt", "w");
+        memset(m_Memory, 0, m_MemorySize);
     }
 
     explicit operator bool() {
@@ -213,16 +214,17 @@ public:
                                                                                 args...);
             {
                 std::lock_guard lock{freePtrSetMut};
-                m_FreePtrSet.emplace(functionCxt.obj.offset, functionCxt.obj.size);
+                m_FreePtrSet[functionCxt.obj.offset] = functionCxt.obj.size;
             }
             m_RemainingClean.fetch_add(1);
         } else {
+            printf("output : %u %u\n", functionCxt.obj.offset, functionCxt.obj.size);
             auto &&result = reinterpret_cast<InvokeAndDestroy>(fp_base + functionCxt.fp_offset)(
                     m_Memory + functionCxt.obj.offset,
                     args...);
             {
                 std::lock_guard lock{freePtrSetMut};
-                m_FreePtrSet.emplace(functionCxt.obj.offset, functionCxt.obj.size);
+                m_FreePtrSet[functionCxt.obj.offset] = functionCxt.obj.size;
             }
             m_RemainingClean.fetch_add(1);
 
@@ -234,22 +236,15 @@ public:
     bool push_back(T &&function) noexcept {
         using Callable = std::decay_t<T>;
 
-        auto const[fp_storage, callable_storage] = /*getCallableStorage(callable_align, callable_size);*/
-        getCallableStorage<Callable>();
+        MemCxt const memCxt = getCallableStorage<Callable>();
 
 
-        if (!fp_storage || !callable_storage)
+        if (!memCxt.size)
             return false;
 
-        auto const obj_ptr = std::launder(new(callable_storage) Callable{std::forward<T>(function)});
-        std::launder(new(fp_storage) AtomicFunctionCxt{})->store(
-                {static_cast<uint32_t>(reinterpret_cast<uintptr_t>(&invoke<Callable> ) - fp_base),
-                 static_cast<uint16_t>(std::distance(static_cast<std::byte *>(fp_storage),
-                                                     static_cast<std::byte *>(callable_storage))),
-                 static_cast<uint16_t>(
-                         std::distance(static_cast<std::byte *>(fp_storage), reinterpret_cast<std::byte *>(obj_ptr)) +
-                         sizeof(Callable))
-                });
+        new(align<Callable>(m_Memory + memCxt.offset)) Callable{std::forward<T>(function)};
+        m_ReadFunctions.push(
+                {static_cast<uint32_t>(reinterpret_cast<uintptr_t>(&invoke<Callable> ) - fp_base), memCxt});
 
         m_Remaining.fetch_add(1);
         m_RemainingRead.fetch_add(1);
@@ -257,14 +252,14 @@ public:
         return true;
     }
 
-    [[nodiscard]] size_t storage_used() const noexcept {
+    /*[[nodiscard]] size_t storage_used() const noexcept {
         auto input_pos = m_InputPos.load();
         auto out_pos = m_OutPosRead.load();
         if (input_pos > out_pos) return input_pos - out_pos;
         else if (input_pos == out_pos) return m_Remaining.load() ? m_MemorySize : 0;
         else
             return m_MemorySize - (out_pos - input_pos);
-    }
+    }*/
 
 };
 
