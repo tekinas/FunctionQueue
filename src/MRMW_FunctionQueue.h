@@ -15,6 +15,7 @@
 #include <vector>
 
 #include <boost/lockfree/queue.hpp>
+#include <queue>
 
 template<typename FunctionSignature>
 class MRMW_FunctionQueue {
@@ -41,10 +42,13 @@ private:
     std::atomic<size_t> m_RemainingClean;
     std::atomic<size_t> m_Remaining;
 
-    boost::lockfree::queue<FunctionCxt, boost::lockfree::capacity<20>> m_ReadFunctions;
+//    boost::lockfree::queue<FunctionCxt, boost::lockfree::capacity<100>>
+     std::queue<FunctionCxt> m_ReadFunctions;
     std::unordered_map<uint32_t, uint32_t> m_FreePtrSet;
 
-    std::mutex outPosMut, freePtrSetMut;
+    std::mutex outPosMut, freePtrSetMut, readQueueMut;
+
+    std::vector<MemCxt> reads, follow;
 
     std::byte *const m_Memory;
     size_t const m_MemorySize;
@@ -143,10 +147,8 @@ private:
                         assert(memCxt.size);
 //                        printf("input : %u %u\n", memCxt.offset, memCxt.size);
 
-                    } else
-                        assert(!memCxt.size);
-                } else
-                    assert(!memCxt.size);
+                    }
+                }
             }
 
             if (!memCxt.size) return {};
@@ -168,13 +170,15 @@ private:
 
     std::byte *checkNAdvanceOutPos() noexcept {
         auto out_pos = m_OutPosFollow.load();
-        auto const rem = m_RemainingClean.load();
+        auto rem = m_RemainingClean.load();
 
         if (!rem || !outPosMut.try_lock()) {
             return out_pos;
         }
 
         std::lock_guard lock{outPosMut, std::adopt_lock};
+        out_pos = m_OutPosFollow.load();
+        rem = m_RemainingClean.load();
 
         auto cleaned = 0;
         for (; cleaned != rem;) {
@@ -185,12 +189,12 @@ private:
             else if (stride_iter->second) {
                 out_pos += stride_iter->second;
                 ++cleaned;
+//                follow.push_back({stride_iter->first, stride_iter->second});
                 assert(out_pos == (m_Memory + stride_iter->first + stride_iter->second));
 //                printf("cleaned : %u %u\n", stride_iter->first, stride_iter->second);
             } else {
                 out_pos = m_Memory;
             }
-
             m_FreePtrSet.erase(stride_iter);
         }
 
@@ -221,16 +225,20 @@ public:
         size_t rem = m_RemainingRead.load();
         if (!rem) return false;
 
-        while (rem && !m_RemainingRead.compare_exchange_strong(rem, rem - 1));
+        while (rem && !m_RemainingRead.compare_exchange_weak(rem, rem - 1));
         return rem;
     }
 
     inline R callAndPop(Args ... args) noexcept {
         FunctionCxt functionCxt;
 
-        auto hasVal = m_ReadFunctions.pop(functionCxt);
-
-        assert(hasVal);
+//        m_ReadFunctions.pop(functionCxt);
+        {
+            std::lock_guard lock{readQueueMut};
+            functionCxt = m_ReadFunctions.front();
+            m_ReadFunctions.pop();
+//            reads.push_back(functionCxt.obj);
+        }
 
         if constexpr (std::is_same_v<R, void>) {
             reinterpret_cast<InvokeAndDestroy>(fp_base + functionCxt.fp_offset)(m_Memory + functionCxt.obj.offset,
@@ -266,8 +274,16 @@ public:
             return false;
 
         new(align<Callable>(m_Memory + memCxt.offset)) Callable{std::forward<T>(function)};
-        assert(m_ReadFunctions.push(
-                {static_cast<uint32_t>(reinterpret_cast<uintptr_t>(&invoke<Callable> ) - fp_base), memCxt}));
+//        printf("input : %u %u\n", memCxt.offset, memCxt.size);
+
+       /* m_ReadFunctions.push(
+                {static_cast<uint32_t>(reinterpret_cast<uintptr_t>(&invoke<Callable> ) - fp_base), memCxt});*/
+
+        {
+            std::lock_guard lock{readQueueMut};
+            m_ReadFunctions.push(
+                    {static_cast<uint32_t>(reinterpret_cast<uintptr_t>(&invoke<Callable> ) - fp_base), memCxt});
+        }
 
         m_Remaining.fetch_add(1);
         m_RemainingRead.fetch_add(1);
