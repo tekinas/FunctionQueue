@@ -56,7 +56,7 @@ int main(int argc, char **argv) {
         while (threads) {
             while (!rawComputeQueue) std::this_thread::yield();
             auto const res = rawComputeQueue.callAndPop(seed);
-            printf("%lu\n", res);
+//            printf("%lu\n", res);
             if (res == std::numeric_limits<size_t>::max()) --threads;
             else result_vector.push_back(res);
         }
