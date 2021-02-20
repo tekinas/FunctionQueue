@@ -22,7 +22,6 @@
     <list default="true" id="208b6fd8-6760-4f44-bd15-2f487cfe8997" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/MRMW_FunctionQueue.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/MRMW_FunctionQueue.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/fq_test_1r_nw.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/fq_test_1r_nw.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/fq_test_nr_nw.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/fq_test_nr_nw.cpp" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -56,11 +55,6 @@
     <property name="settings.editor.selected.configurable" value="CPPToolchains" />
   </component>
   <component name="RunManager" selected="CMake Application.fq_test_nr_nw">
-    <configuration default="true" type="CLionExternalRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" PASS_PARENT_ENVS_2="true">
-      <method v="2">
-        <option name="CLION.EXTERNAL.BUILD" enabled="true" />
-      </method>
-    </configuration>
     <configuration name="fq_test_1r_1w" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="FunctionQueue" TARGET_NAME="fq_test_1r_1w" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="FunctionQueue" RUN_TARGET_NAME="fq_test_1r_1w">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
@@ -99,11 +93,6 @@
     <configuration name="fq_test_sync_only" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="FunctionQueue" TARGET_NAME="fq_test_sync_only" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="FunctionQueue" RUN_TARGET_NAME="fq_test_sync_only">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
-      </method>
-    </configuration>
-    <configuration default="true" type="GradleAppRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" PASS_PARENT_ENVS_2="true">
-      <method v="2">
-        <option name="com.jetbrains.cidr.cpp.gradle.execution.GradleNativeBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
     <list>
@@ -151,6 +140,8 @@
       <workItem from="1613761757084" duration="7823000" />
       <workItem from="1613770242263" duration="1692000" />
       <workItem from="1613780732928" duration="9728000" />
+      <workItem from="1613812564512" duration="1245000" />
+      <workItem from="1613838656344" duration="5738000" />
     </task>
     <servers />
   </component>

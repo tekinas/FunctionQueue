@@ -43,7 +43,7 @@ private:
     std::atomic<size_t> m_Remaining;
 
 //    boost::lockfree::queue<FunctionCxt, boost::lockfree::capacity<100>>
-     std::queue<FunctionCxt> m_ReadFunctions;
+    std::queue<FunctionCxt> m_ReadFunctions;
     std::unordered_map<uint32_t, uint32_t> m_FreePtrSet;
 
     std::mutex outPosMut, freePtrSetMut, readQueueMut;
@@ -99,9 +99,7 @@ private:
     template<typename Callable>
     MemCxt getCallableStorage() noexcept {
         auto getAlignedStorage = [](void *buffer, size_t size) noexcept {
-            return static_cast<std::byte *>(/*align<Callable>(buffer, size) +*/ std::align(alignof(Callable),
-                                                                                           sizeof(Callable), buffer,
-                                                                                           size));
+            return static_cast<std::byte *>(align<Callable>(buffer, size));
         };
 
         MemCxt memCxt;
@@ -120,32 +118,20 @@ private:
             search_ahead = input_pos >= out_pos;
 
             if (size_t const buffer_size = m_Memory + m_MemorySize - input_pos; search_ahead && buffer_size) {
-                auto obj_buff = getAlignedStorage(input_pos, buffer_size);
-                if (obj_buff) {
-                    assert(obj_buff >= input_pos);
-
+                if (auto obj_buff = getAlignedStorage(input_pos, buffer_size)) {
                     search_ahead = false;
                     memCxt = {.offset = static_cast<uint32_t>(std::distance(m_Memory, input_pos)),
-                            .size = static_cast<uint32_t>(obj_buff - input_pos + sizeof(Callable))};
-//                    printf("input : %u %u\n", memCxt.offset, memCxt.size);
-
+                            .size = static_cast<uint32_t>(std::distance(input_pos, obj_buff + sizeof(Callable)))};
                     continue;
                 }
             }
 
             {
                 auto const mem = search_ahead ? m_Memory : input_pos;
-                assert(out_pos >= mem);
                 if (size_t const buffer_size = out_pos - mem) {
-                    auto obj_buff = getAlignedStorage(mem, buffer_size);
-                    if (obj_buff) {
-                        assert(obj_buff >= mem);
-                        assert(buffer_size >= sizeof(Callable));
-
+                    if (auto obj_buff = getAlignedStorage(mem, buffer_size)) {
                         memCxt = {.offset = static_cast<uint32_t>(std::distance(m_Memory, mem)),
-                                .size = static_cast<uint32_t>(obj_buff - mem + sizeof(Callable))};
-                        assert(memCxt.size);
-//                        printf("input : %u %u\n", memCxt.offset, memCxt.size);
+                                .size = static_cast<uint32_t>(std::distance(mem, obj_buff + sizeof(Callable)))};
 
                     }
                 }
@@ -180,22 +166,24 @@ private:
         out_pos = m_OutPosFollow.load();
         rem = m_RemainingClean.load();
 
+        uint32_t outpos_offset = std::distance(m_Memory, out_pos);
+
         auto cleaned = 0;
         for (; cleaned != rem;) {
             std::lock_guard lock{freePtrSetMut};
 
-            auto const stride_iter = m_FreePtrSet.find(std::distance(m_Memory, out_pos));
+            auto const stride_iter = m_FreePtrSet.find(outpos_offset);
             if (stride_iter == m_FreePtrSet.end()) break;
             else if (stride_iter->second) {
-                out_pos += stride_iter->second;
+                outpos_offset += stride_iter->second;
                 ++cleaned;
-//                follow.push_back({stride_iter->first, stride_iter->second});
-                assert(out_pos == (m_Memory + stride_iter->first + stride_iter->second));
-//                printf("cleaned : %u %u\n", stride_iter->first, stride_iter->second);
+                follow.push_back({stride_iter->first, stride_iter->second});
+                assert(outpos_offset == (stride_iter->first + stride_iter->second));
             } else {
-                out_pos = m_Memory;
+                outpos_offset = 0;
             }
-            m_FreePtrSet.erase(stride_iter);
+
+            m_FreePtrSet.erase(stride_iter->first);
         }
 
 
@@ -204,6 +192,7 @@ private:
             m_RemainingClean.fetch_sub(cleaned);
             m_Remaining.fetch_sub(cleaned);
         }
+        out_pos = m_Memory + outpos_offset;
         m_OutPosFollow.store(out_pos);
 
         return out_pos;
@@ -237,7 +226,7 @@ public:
             std::lock_guard lock{readQueueMut};
             functionCxt = m_ReadFunctions.front();
             m_ReadFunctions.pop();
-//            reads.push_back(functionCxt.obj);
+            reads.push_back(functionCxt.obj);
         }
 
         if constexpr (std::is_same_v<R, void>) {
@@ -276,8 +265,8 @@ public:
         new(align<Callable>(m_Memory + memCxt.offset)) Callable{std::forward<T>(function)};
 //        printf("input : %u %u\n", memCxt.offset, memCxt.size);
 
-       /* m_ReadFunctions.push(
-                {static_cast<uint32_t>(reinterpret_cast<uintptr_t>(&invoke<Callable> ) - fp_base), memCxt});*/
+        /* m_ReadFunctions.push(
+                 {static_cast<uint32_t>(reinterpret_cast<uintptr_t>(&invoke<Callable> ) - fp_base), memCxt});*/
 
         {
             std::lock_guard lock{readQueueMut};
