@@ -43,7 +43,7 @@ private:
     std::atomic<size_t> m_RemainingClean;
     std::atomic<size_t> m_Remaining;
 
-    boost::lockfree::queue<FunctionCxt, boost::lockfree::capacity<100>>
+    boost::lockfree::queue<FunctionCxt/*, boost::lockfree::capacity<100>*/>
     /*std::queue<FunctionCxt>*/ m_ReadFunctions;
 
     tbb::concurrent_hash_map<uint32_t, uint32_t>
@@ -217,7 +217,8 @@ private:
 public:
 
     MRMW_FunctionQueue(void *mem, size_t size) : m_Memory{static_cast<std::byte *const>(mem)}, m_MemorySize{size},
-                                                 m_RemainingRead{0}, m_Remaining{0}, m_RemainingClean{0} {
+                                                 m_RemainingRead{0}, m_Remaining{0}, m_RemainingClean{0},
+                                                 m_ReadFunctions{1000} {
         m_InputPos = m_OutPosFollow = m_Memory;
         printf("init input :%u\n", std::distance(m_Memory, m_InputPos.load()));
         printf("init output :%u\n", std::distance(m_Memory, m_OutPosFollow.load()));
@@ -295,8 +296,8 @@ public:
         new(align<Callable>(m_Memory + memCxt.offset)) Callable{std::forward<T>(function)};
 //        printf("input : %u %u\n", memCxt.offset, memCxt.size);
 
-         m_ReadFunctions.push(
-                 {static_cast<uint32_t>(reinterpret_cast<uintptr_t>(&invoke<Callable> ) - fp_base), memCxt});
+        m_ReadFunctions.push(
+                {static_cast<uint32_t>(reinterpret_cast<uintptr_t>(&invoke<Callable> ) - fp_base), memCxt});
 
         /*{
             std::lock_guard lock{readQueueMut};

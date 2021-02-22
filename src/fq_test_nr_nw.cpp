@@ -32,7 +32,7 @@ public:
                 [computeCxt{std::move(computeCxt)}, functionQueue]<typename T>(T &&t) mutable {
                     auto compute = [computeCxt{std::move(computeCxt)}, t{std::forward<T>(t)}, functionQueue]() mutable {
                         computeCxt->num = t(computeCxt->num);
-                        println(computeCxt->num);
+//                        println(computeCxt->num);
 
                         if (++computeCxt->func != computeCxt->num_functions)
                             ComputeCxt::addComputeTask(std::move(computeCxt), functionQueue);

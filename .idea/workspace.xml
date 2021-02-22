@@ -22,7 +22,6 @@
     <list default="true" id="208b6fd8-6760-4f44-bd15-2f487cfe8997" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/MRMW_FunctionQueue.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/MRMW_FunctionQueue.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/fq_test_1r_nw.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/fq_test_1r_nw.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/fq_test_nr_nw.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/fq_test_nr_nw.cpp" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -33,7 +32,7 @@
   <component name="ClangdSettings">
     <option name="formatViaClangd" value="false" />
   </component>
-  <component name="ExecutionTargetManager" SELECTED_TARGET="CMakeBuildProfile:Release" />
+  <component name="ExecutionTargetManager" SELECTED_TARGET="CMakeBuildProfile:Debug" />
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
@@ -55,7 +54,7 @@
     <property name="restartRequiresConfirmation" value="false" />
     <property name="settings.editor.selected.configurable" value="CPPToolchains" />
   </component>
-  <component name="RunManager" selected="CMake Application.fq_test_nr_nw">
+  <component name="RunManager" selected="CMake Application.fq_test_1r_nw">
     <configuration default="true" type="CLionExternalRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" PASS_PARENT_ENVS_2="true">
       <method v="2">
         <option name="CLION.EXTERNAL.BUILD" enabled="true" />
@@ -159,7 +158,7 @@
       <workItem from="1613956993296" duration="13540000" />
       <workItem from="1614010055887" duration="199000" />
       <workItem from="1614015800748" duration="365000" />
-      <workItem from="1614032794105" duration="1017000" />
+      <workItem from="1614032794105" duration="3007000" />
     </task>
     <servers />
   </component>
