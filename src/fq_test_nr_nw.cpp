@@ -47,8 +47,12 @@ public:
 };
 
 int main(int argc, char **argv) {
+    if (argc == 1) {
+        println("usage : ./fq_test_nr_nw <buffer_size> <seed> <functions> <threads> <compute_chains>");
+    }
+
     size_t const rawQueueMemSize =
-            [&] { return (argc >= 2) ? atof(argv[1]) : 400 / 1024.0 / 1024.0; }() * 1024 * 1024;
+            [&] { return (argc >= 2) ? atof(argv[1]) : 40/*0 / 1024.0 / 1024.0*/; }() * 1024 * 1024;
 
     auto const rawQueueMem = std::make_unique<uint8_t[]>(rawQueueMemSize + 10);
     println("using buffer of size :", rawQueueMemSize);

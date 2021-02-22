@@ -43,15 +43,15 @@ private:
     std::atomic<size_t> m_RemainingClean;
     std::atomic<size_t> m_Remaining;
 
-    /*boost::lockfree::queue<FunctionCxt, boost::lockfree::capacity<100>>*/
-    std::queue<FunctionCxt> m_ReadFunctions;
+    boost::lockfree::queue<FunctionCxt, boost::lockfree::capacity<100>>
+    /*std::queue<FunctionCxt>*/ m_ReadFunctions;
 
-    std::unordered_map<uint32_t, uint32_t>
-    /*tbb::concurrent_hash_map<uint32_t, uint32_t> */m_FreePtrSet;
+    tbb::concurrent_hash_map<uint32_t, uint32_t>
+    /*std::unordered_map<uint32_t, uint32_t>*/ m_FreePtrSet;
 
-    std::mutex outPosMut, freePtrSetMut, readQueueMut;
+    std::mutex outPosMut/*, freePtrSetMut*//*, readQueueMut*/;
 
-    std::vector<MemCxt> reads, follow, write;
+    /*std::vector<MemCxt> reads, follow, write;*/
 
     std::byte *const m_Memory;
     size_t const m_MemorySize;
@@ -146,13 +146,13 @@ private:
 
         if (search_ahead) {
             assert(memCxt.offset == 0 && memCxt.size);
-            std::lock_guard lock{freePtrSetMut};
+            /*std::lock_guard lock{freePtrSetMut};
 
             if (auto data = m_FreePtrSet.find(std::distance(m_Memory, input_pos)); data != m_FreePtrSet.end()) {
                 printf("~~~~~~~~~~~~~~~~~~~~~~~~~ sentinel already present : %d %d\n", data->first, data->second);
             }
-            m_FreePtrSet[std::distance(m_Memory, input_pos)] = 0;
-//            m_FreePtrSet.emplace(std::distance(m_Memory, input_pos), 0);
+            m_FreePtrSet[std::distance(m_Memory, input_pos)] = 0;*/
+            m_FreePtrSet.emplace(std::distance(m_Memory, input_pos), 0);
         }
 
         assert(memCxt.size);
@@ -181,27 +181,25 @@ private:
 
         uint32_t outpos_offset = std::distance(m_Memory, out_pos);
 
-        std::lock_guard freeSetLock{freePtrSetMut};
-
         auto cleaned = 0;
         for (; cleaned != rem;) {
 //            std::lock_guard freeSetLock{freePtrSetMut};
-            auto const stride_iter = m_FreePtrSet.find(outpos_offset);
+//            auto const stride_iter = m_FreePtrSet.find(outpos_offset);
 
-            /*tbb::concurrent_hash_map<uint32_t, uint32_t>::accessor stride_iter;
-            bool found = m_FreePtrSet.find(stride_iter, outpos_offset);*/
+            tbb::concurrent_hash_map<uint32_t, uint32_t>::accessor stride_iter;
+            bool found = m_FreePtrSet.find(stride_iter, outpos_offset);
 
-            if (stride_iter == m_FreePtrSet.end() /*!found*/) break;
+            if (/*stride_iter == m_FreePtrSet.end()*/ !found) break;
             else if (stride_iter->second) {
                 outpos_offset += stride_iter->second;
                 ++cleaned;
-                follow.push_back({stride_iter->first, stride_iter->second});
+//                follow.push_back({stride_iter->first, stride_iter->second});
             } else {
                 outpos_offset = 0;
             }
 
-            m_FreePtrSet.erase(stride_iter->first);
-//            m_FreePtrSet.erase(stride_iter);
+//            m_FreePtrSet.erase(stride_iter->first);
+            m_FreePtrSet.erase(stride_iter);
         }
 
 
@@ -238,19 +236,19 @@ public:
     inline R callAndPop(Args ... args) noexcept {
         FunctionCxt functionCxt;
 
-        /* while (m_ReadFunctions.empty());
-         m_ReadFunctions.pop(functionCxt);*/
+        while (m_ReadFunctions.empty());
+        m_ReadFunctions.pop(functionCxt);
 
-        {
+        /*{
             std::lock_guard lock{readQueueMut};
             functionCxt = m_ReadFunctions.front();
             m_ReadFunctions.pop();
-        }
+        }*/
 
         if constexpr (std::is_same_v<R, void>) {
             reinterpret_cast<InvokeAndDestroy>(fp_base + functionCxt.fp_offset)(m_Memory + functionCxt.obj.offset,
                                                                                 args...);
-            {
+            /*{
                 std::lock_guard lock{freePtrSetMut};
                 if (auto data = m_FreePtrSet.find(functionCxt.obj.offset); data != m_FreePtrSet.end()) {
                     printf("~~~~~~~~~~~~~~~~~~~~~~~~~ ptr already present : %d %d -> %d %d\n", data->first,
@@ -258,16 +256,16 @@ public:
                 }
                 m_FreePtrSet[functionCxt.obj.offset] = functionCxt.obj.size;
                 reads.push_back(functionCxt.obj);
-            }
+            }*/
 
-//            m_FreePtrSet.emplace(functionCxt.obj.offset, functionCxt.obj.size);
+            m_FreePtrSet.emplace(functionCxt.obj.offset, functionCxt.obj.size);
 
             m_RemainingClean.fetch_add(1);
         } else {
 //            printf("output : %u %u\n", functionCxt.obj.offset, functionCxt.obj.size);
             auto &&result = reinterpret_cast<InvokeAndDestroy>(fp_base + functionCxt.fp_offset)(
                     m_Memory + functionCxt.obj.offset, args...);
-            {
+            /*{
                 std::lock_guard lock{freePtrSetMut};
                 if (auto data = m_FreePtrSet.find(functionCxt.obj.offset); data != m_FreePtrSet.end()) {
                     printf("~~~~~~~~~~~~~~~~~~~~~~~~~ ptr already present : %d %d -> %d %d\n", data->first,
@@ -275,9 +273,9 @@ public:
                 }
                 m_FreePtrSet[functionCxt.obj.offset] = functionCxt.obj.size;
                 reads.push_back(functionCxt.obj);
-            }
+            }*/
 
-//            m_FreePtrSet.emplace(functionCxt.obj.offset, functionCxt.obj.size);
+            m_FreePtrSet.emplace(functionCxt.obj.offset, functionCxt.obj.size);
 
             m_RemainingClean.fetch_add(1);
 
@@ -297,15 +295,15 @@ public:
         new(align<Callable>(m_Memory + memCxt.offset)) Callable{std::forward<T>(function)};
 //        printf("input : %u %u\n", memCxt.offset, memCxt.size);
 
-        /* m_ReadFunctions.push(
+         m_ReadFunctions.push(
                  {static_cast<uint32_t>(reinterpret_cast<uintptr_t>(&invoke<Callable> ) - fp_base), memCxt});
- */
-        {
+
+        /*{
             std::lock_guard lock{readQueueMut};
             m_ReadFunctions.push(
                     {static_cast<uint32_t>(reinterpret_cast<uintptr_t>(&invoke<Callable> ) - fp_base), memCxt});
             write.push_back(memCxt);
-        }
+        }*/
 
         m_Remaining.fetch_add(1);
         m_RemainingRead.fetch_add(1);
