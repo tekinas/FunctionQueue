@@ -1,7 +1,7 @@
 #include <thread>
 #include <string>
 
-#include "MRMW_FunctionQueue.h"
+#include "ConcurrentFunctionQueue.h"
 #include "util.h"
 #include "ComputeCallbackGenerator.h"
 
@@ -9,7 +9,7 @@
 using namespace util;
 
 using ComputeFunctionSig = void();
-using LockFreeQueue = MRMW_FunctionQueue</*true, true, */ComputeFunctionSig>;
+using LockFreeQueue = ConcurrentFunctionQueue</*true, true, */ComputeFunctionSig>;
 
 void test_lockFreeQueue(LockFreeQueue &rawComputeQueue, CallbackGenerator &callbackGenerator, size_t functions);
 
@@ -52,7 +52,7 @@ int main(int argc, char **argv) {
     }
 
     size_t const rawQueueMemSize =
-            [&] { return (argc >= 2) ? atof(argv[1]) : 40/*0 / 1024.0 / 1024.0*/; }() * 1024 * 1024;
+            [&] { return (argc >= 2) ? atof(argv[1]) : 2/*0 / 1024.0 / 1024.0*/; }() * 1024 * 1024;
 
     auto const rawQueueMem = std::make_unique<uint8_t[]>(rawQueueMemSize + 10);
     println("using buffer of size :", rawQueueMemSize);
@@ -63,7 +63,7 @@ int main(int argc, char **argv) {
     size_t const functions = [&] { return (argc >= 4) ? atol(argv[3]) : 12639182; }();
     println("total functions :", functions);
 
-    size_t const num_threads = [&] { return (argc >= 5) ? atol(argv[4]) : 2/*std::thread::hardware_concurrency()*/; }();
+    size_t const num_threads = [&] { return (argc >= 5) ? atol(argv[4]) : 8/*std::thread::hardware_concurrency()*/; }();
     println("total num_threads :", num_threads);
 
     size_t const compute_chains = [&] {

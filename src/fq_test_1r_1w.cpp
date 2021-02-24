@@ -25,7 +25,7 @@ int main(int argc, char **argv) {
     size_t const functions = [&] { return (argc >= 4) ? atol(argv[3]) : 12639182; }();
     println("total functions :", functions);
 
-    FunctionQueue<true, true, ComputeFunctionSig> rawComputeQueue{rawQueueMem.get(), rawQueueMemSize};
+    LockFreeQueue rawComputeQueue{rawQueueMem.get(), rawQueueMemSize};
 
     CallbackGenerator callbackGenerator{seed};
 

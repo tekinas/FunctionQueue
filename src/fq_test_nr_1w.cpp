@@ -1,7 +1,7 @@
 #include <thread>
 #include <string>
 
-#include "MRMW_FunctionQueue.h"
+#include "ConcurrentFunctionQueue.h"
 #include "SyncFuctionQueue.h"
 #include "util.h"
 #include "ComputeCallbackGenerator.h"
@@ -10,7 +10,7 @@
 using namespace util;
 
 using ComputeFunctionSig = size_t(size_t);
-using LockFreeQueue = MRMW_FunctionQueue</*true, true, */ComputeFunctionSig>;
+using LockFreeQueue = ConcurrentFunctionQueue</*true, true, */ComputeFunctionSig>;
 
 int main(int argc, char **argv) {
     size_t const rawQueueMemSize =

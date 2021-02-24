@@ -78,9 +78,6 @@ public:
     template<typename T>
     std::conditional_t<fixedSize, bool, void> push_back(T &&function) noexcept {
         using Callable = std::decay_t<T>;
-//        static_assert(std::is_trivially_copyable_v<Callable>);
-
-        std::lock_guard lock{storage_mutex};
 
         auto const[fp_storage, callable_storage] = /*getCallableStorage(callable_align, callable_size);*/ getCallableStorage<Callable>();
 
@@ -90,8 +87,8 @@ public:
 
 
         new(fp_storage)
-                CallableCxt{.fp_offset  {static_cast<uint32_t>(reinterpret_cast<uintptr_t>(&invoke < Callable > ) -
-                                                               fp_base)},
+                CallableCxt{.fp_offset = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(&invoke < Callable > ) -
+                                                               fp_base),
                 .stride = static_cast<uint16_t>(std::distance(static_cast<std::byte *>(fp_storage),
                                                               static_cast<std::byte *>(callable_storage)) +
                                                 sizeof(Callable)),
@@ -146,7 +143,7 @@ public:
     requires synced
     inline R callAndPop(Args ... args) noexcept {
         CallableCxt *callable_cxt;
-        auto outPtr = m_OutPosReadCurrent.load(std::memory_order::seq_cst);
+        auto outPtr = m_OutPosReadCurrent.load(std::memory_order::acquire);
 
         while (!m_OutPosReadCurrent.compare_exchange_weak(outPtr, [&, outPtr]() mutable {
             callable_cxt = align<CallableCxt>(outPtr);
@@ -244,16 +241,16 @@ private:
                              reinterpret_cast<std::byte *>(callable_cxt) + callable_cxt->stride};
         };
 
-        std::byte *outPtr = m_OutPosStart.load(/*std::memory_order::relaxed*/);
-        size_t rem = m_RemainingFront.load(/*std::memory_order::relaxed*/);
+        std::byte *outPtr = m_OutPosStart.load(std::memory_order::relaxed);
+        size_t rem = m_RemainingFront.load(std::memory_order::relaxed);
         for (auto[advance, nextOutPos] = check_pos(outPtr);
-             advance && (rem = m_RemainingFront.load(/*std::memory_order::relaxed*/));
+             advance && (rem = m_RemainingFront.load(std::memory_order::relaxed));
              std::tie(advance, nextOutPos) = check_pos(outPtr)) {
             assert(outPtr != nextOutPos);
-            if (m_OutPosStart.compare_exchange_strong(outPtr, nextOutPos/*, std::memory_order_relaxed,
-                                                      std::memory_order_relaxed*/)) {
+            if (m_OutPosStart.compare_exchange_strong(outPtr, nextOutPos, std::memory_order_relaxed,
+                                                      std::memory_order_relaxed)) {
                 outPtr = nextOutPos;
-                auto prev_rem = m_RemainingFront.fetch_sub(1/*, std::memory_order_relaxed*/);
+                auto prev_rem = m_RemainingFront.fetch_sub(1, std::memory_order_relaxed);
                 if (prev_rem == 1) {
                     rem = 0;
                     break;
@@ -314,8 +311,6 @@ private:
         }
 
         m_RemainingFront.fetch_add(1, std::memory_order::release);
-
-//        printf("offset : %lu\n", static_cast<std::byte *>(storage.first) - m_CallableQueueMemory);
 
         return storage;
     }
@@ -496,12 +491,10 @@ private:
     [[no_unique_address]] std::conditional_t<fixedSize, Empty, std::pmr::memory_resource *> m_MemoryResource;
 
     struct CallableCxt {
-        std::atomic<uint32_t> fp_offset;
+        std::atomic<uint32_t> fp_offset{};
         uint16_t stride{};
         uint16_t callable_offset{};
     };
-
-    std::mutex storage_mutex;
 };
 
 #endif //CPP_PROJECT_FUNCTIONQUEUE2_H
