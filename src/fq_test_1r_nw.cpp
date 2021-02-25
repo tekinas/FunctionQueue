@@ -23,12 +23,20 @@ int main(int argc, char **argv) {
             MemCxt obj{};
         };
 
+        struct MemPos {
+            uint64_t offset: 56;
+            uint8_t hash: 8;
+        };
+
         println(sizeof(MemCxt), " ", alignof(MemCxt));
         println(sizeof(FunctionCxt), " ", alignof(FunctionCxt));
+        println(sizeof(MemPos), " ", alignof(MemPos));
+        println(sizeof(std::atomic<MemPos>), " ", alignof(std::atomic<MemPos>), " ",
+                std::atomic<MemPos>::is_always_lock_free);
     }();
 
     size_t const rawQueueMemSize =
-            [&] { return (argc >= 2) ? atof(argv[1]) : 3/*0 / 1024.0 / 1024.0*/; }() * 1024 * 1024;
+            [&] { return (argc >= 2) ? atof(argv[1]) : 500 / 1024.0 / 1024.0; }() * 1024 * 1024;
 
     auto const rawQueueMem = std::make_unique<uint8_t[]>(rawQueueMemSize + 10);
     println("using buffer of size :", rawQueueMemSize);
