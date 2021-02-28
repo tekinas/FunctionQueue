@@ -1,16 +1,22 @@
-#ifndef FUNCTIONQUEUE_CONCURRENTFUNCTIONQUEUE_H
-#define FUNCTIONQUEUE_CONCURRENTFUNCTIONQUEUE_H
+#ifndef FUNCTIONQUEUE_ConcurrentFunctionQueue_H
+#define FUNCTIONQUEUE_ConcurrentFunctionQueue_H
 
 #include <atomic>
+#include <type_traits>
+#include <tuple>
 #include <cstring>
+#include <cassert>
 #include <mutex>
-
-#include <unordered_map>
-#include <thread>
+#include <shared_mutex>
+#include <unordered_set>
 #include <vector>
+#include <iostream>
 
 #include <boost/lockfree/queue.hpp>
 #include <tbb/concurrent_hash_map.h>
+#include <queue>
+
+#include <absl/hash/hash.h>
 
 template<typename FunctionSignature>
 class ConcurrentFunctionQueue {
@@ -31,15 +37,25 @@ private:
     };
 
     struct MemPos {
-        uint64_t offset: 32;
-        uint32_t hash: 32;
+    private:
+        uint32_t hash{};
+        uint32_t offset{};
 
-        std::byte *getMemory(std::byte *base) noexcept {
-            return base + offset;
+    public:
+        template<typename H>
+        friend H AbslHashValue(H h, const MemPos &c) {
+            return H::combine(std::move(h), c.hash, c.offset);
         }
 
-        MemPos getNext(uint64_t new_offset) const noexcept {
-            return {.offset = new_offset, .hash = static_cast<uint32_t>(hash xor new_offset xor offset)};
+        MemPos getNext(uint32_t next_offset) const noexcept {
+            MemPos memPos;
+            memPos.hash = absl::Hash<MemPos>{}(*this);
+            memPos.offset = next_offset;
+            return memPos;
+        }
+
+        std::byte *memory(std::byte *base) const noexcept {
+            return base + offset;
         }
     };
 
@@ -48,14 +64,16 @@ private:
     std::atomic<MemPos> m_InputPos;
     std::atomic<std::byte *> m_OutPosFollow;
     std::atomic<size_t> m_Remaining;
+    std::atomic<size_t> m_Writing;
 
-    boost::lockfree::queue<FunctionCxt/*, boost::lockfree::capacity<100>*/> m_ReadFunctions;
+    boost::lockfree::queue<FunctionCxt/*, boost::lockfree::capacity<100>*/>
+    /*std::queue<FunctionCxt>*/ m_ReadFunctions;
 
-    tbb::concurrent_hash_map<uint32_t, uint32_t> m_FreePtrSet;
+    tbb::concurrent_hash_map<uint32_t, uint32_t>
+    /*std::unordered_map<uint32_t, uint32_t>*/ m_FreePtrSet/*, m_WritingSet*/;
 
-    std::mutex updateMut;
-
-    std::unordered_map<std::thread::id, std::vector<uint32_t>> write_pos;
+    std::shared_mutex outPosMut;
+    std::mutex outPosUpdateMut;
 
     std::byte *const m_Memory;
     size_t const m_MemorySize;
@@ -103,18 +121,6 @@ private:
         }
     }
 
-    template<typename T>
-    static inline void *
-    check_storage(void *ptr, size_t space) noexcept {
-        const auto intptr = reinterpret_cast<uintptr_t>(ptr);
-        const auto aligned = (intptr - 1u + alignof(T)) & -alignof(T);
-        const auto diff = aligned - intptr;
-        if ((sizeof(T) + diff) > space)
-            return nullptr;
-        else
-            return reinterpret_cast<void *>(aligned);
-    }
-
     template<typename Callable>
     MemCxt getCallableStorage() noexcept {
         auto getAlignedStorage = [](void *buffer, size_t size) noexcept {
@@ -122,18 +128,24 @@ private:
         };
 
         MemCxt memCxt;
-        MemPos input_mem;
+        MemPos input_mem = m_InputPos.load();;
 
         bool search_ahead;
+        m_Writing.fetch_add(1);
+
         do {
             memCxt = {};
             auto const[out_pos, rem] = checkNAdvanceOutPos();
-            input_mem = m_InputPos.load();
+            auto const input_pos = input_mem.memory(m_Memory);
 
-            auto const input_pos = input_mem.getMemory(m_Memory);
+            m_Writing.fetch_sub(1);
 
-            if (out_pos == input_pos && rem) {
-                return {};
+            if (out_pos == input_pos) {
+                if (rem || m_Writing.load())
+                    return {};
+                else {
+//                    std::cout << "writing : " << m_WritingSet.size() << std::endl;
+                }
             }
 
             search_ahead = input_pos >= out_pos;
@@ -143,7 +155,7 @@ private:
                     search_ahead = false;
                     memCxt = {.offset = static_cast<uint32_t>(std::distance(m_Memory, input_pos)),
                             .size = static_cast<uint32_t>(std::distance(input_pos, obj_buff + sizeof(Callable)))};
-                    continue;
+                    goto INCR_WRITING;
                 }
             }
 
@@ -160,51 +172,77 @@ private:
 
             if (!memCxt.size) return {};
 
-        } while (!m_InputPos.compare_exchange_weak(input_mem,
-                                                   input_mem.getNext(memCxt.offset + memCxt.size),
-                                                   std::memory_order_release, std::memory_order_relaxed));
+            INCR_WRITING:
+            /*{
+                tbb::concurrent_hash_map<uint32_t, uint32_t>::accessor write_offset;
+                if (m_WritingSet.find(write_offset, memCxt.offset)) {
+                    std::cout << "error : someone else is writing at " << memCxt.offset << std::endl;
+                    return {};
+                }
+            }*/
+
+            if (m_Writing.fetch_add(1) == UINT64_MAX) {
+                std::cout << "error : writing is now zero" << std::endl;
+            }
+
+        } while (!m_InputPos.compare_exchange_weak(input_mem, input_mem.getNext(memCxt.offset + memCxt.size)));
+
+        /*if (!m_WritingSet.emplace(memCxt.offset, memCxt.size)) {
+            std::cout << "error : someone else is writing at " << memCxt.offset << std::endl;
+            return {};
+        }*/
 
         if (search_ahead) {
-            m_FreePtrSet.emplace(std::distance(m_Memory, input_mem.getMemory(m_Memory)), 0);
+            m_FreePtrSet.emplace(std::distance(m_Memory, input_mem.memory(m_Memory)), 0);
         }
 
         return memCxt;
     }
 
     std::pair<std::byte *, size_t> checkNAdvanceOutPos() noexcept {
-//        std::lock_guard lock{updateMut};
+        std::byte *out_pos;
+        size_t rem;
+        {
+            std::shared_lock lock{outPosMut};
+            out_pos = m_OutPosFollow.load();
+            rem = m_Remaining.load();
+        }
 
-        auto out_pos = m_OutPosFollow.load(std::memory_order_acquire);
-        auto rem = m_Remaining.load(std::memory_order_acquire);
+        if (!rem || !outPosUpdateMut.try_lock()) {
+            return {out_pos, rem};
+        }
 
-        uint32_t outpos_offset = std::distance(m_Memory, out_pos);
+        std::lock_guard lock{outPosUpdateMut, std::adopt_lock};
+        out_pos = m_OutPosFollow.load();
 
-        bool moved = false;
-        uint32_t cleaned = 0;
+        uint32_t output_offset = std::distance(m_Memory, out_pos);
+
+        auto cleaned = 0;
         while (!m_FreePtrSet.empty()) {
-            typename decltype(m_FreePtrSet)::accessor stride_iter;
-            bool found = m_FreePtrSet.find(stride_iter, outpos_offset);
+            tbb::concurrent_hash_map<uint32_t, uint32_t>::accessor stride_iter;
+            bool found = m_FreePtrSet.find(stride_iter, output_offset);
 
             if (!found) break;
             else if (stride_iter->second) {
-                outpos_offset += stride_iter->second;
+                output_offset += stride_iter->second;
                 ++cleaned;
             } else {
-                outpos_offset = 0;
+                output_offset = 0;
             }
 
-            if (!m_FreePtrSet.erase(stride_iter)) return {out_pos, rem};
-            else moved = true;
+            m_FreePtrSet.erase(stride_iter);
         }
 
 
-        if (moved) {
+        {
+            std::lock_guard outPosUpdateLock{outPosMut};
+
             if (cleaned) {
-                auto prev = m_Remaining.fetch_sub(cleaned, std::memory_order_release);
-                assert(prev >= cleaned);
-                rem = m_Remaining.fetch_sub(cleaned, std::memory_order_release) - cleaned;
-            }
-            m_OutPosFollow.store(out_pos = m_Memory + outpos_offset, std::memory_order_release);
+                rem = m_Remaining.fetch_sub(cleaned) - cleaned;
+            } else rem = m_Remaining.load();
+
+            out_pos = m_Memory + output_offset;
+            m_OutPosFollow.store(out_pos);
         }
 
         return {out_pos, rem};
@@ -214,20 +252,20 @@ private:
 public:
 
     ConcurrentFunctionQueue(void *mem, size_t size) : m_Memory{static_cast<std::byte *const>(mem)}, m_MemorySize{size},
-                                                      m_RemainingRead{0}, m_Remaining{0},
-                                                      m_InputPos{{.offset=0, .hash = 0}},
-                                                      m_ReadFunctions{1000} {
+                                                      m_RemainingRead{0}, m_Remaining{0}, m_ReadFunctions{1000},
+                                                      m_InputPos{} {
         m_OutPosFollow = m_Memory;
+        printf("init input :%u\n", std::distance(m_Memory, m_InputPos.load().memory(m_Memory)));
+        printf("init output :%u\n", std::distance(m_Memory, m_OutPosFollow.load()));
 
         memset(m_Memory, 0, m_MemorySize);
     }
 
     explicit operator bool() {
-        size_t rem = m_RemainingRead.load(std::memory_order_relaxed);
+        size_t rem = m_RemainingRead.load();
         if (!rem) return false;
 
-        while (rem && !m_RemainingRead.compare_exchange_weak(rem, rem - 1,
-                                                             std::memory_order_acquire, std::memory_order_relaxed));
+        while (rem && !m_RemainingRead.compare_exchange_weak(rem, rem - 1));
         return rem;
     }
 
@@ -237,18 +275,26 @@ public:
         while (m_ReadFunctions.empty());
         m_ReadFunctions.pop(functionCxt);
 
+        /*tbb::concurrent_hash_map<uint32_t, uint32_t>::accessor write_offset;
+        if (!m_WritingSet.find(write_offset, functionCxt.obj.offset)) {
+            std::cout << "error : no data written here " << functionCxt.obj.offset << std::endl;
+        }*/
+
         if constexpr (std::is_same_v<R, void>) {
             reinterpret_cast<InvokeAndDestroy>(fp_base + functionCxt.fp_offset)(m_Memory + functionCxt.obj.offset,
                                                                                 args...);
-            std::atomic_thread_fence(std::memory_order_release);
-            m_FreePtrSet.emplace(functionCxt.obj.offset, functionCxt.obj.size);
-        } else {
 
+            m_FreePtrSet.emplace(functionCxt.obj.offset, functionCxt.obj.size);
+//            m_WritingSet.erase(write_offset);
+
+        } else {
             auto &&result = reinterpret_cast<InvokeAndDestroy>(fp_base + functionCxt.fp_offset)(
                     m_Memory + functionCxt.obj.offset, args...);
 
             std::atomic_thread_fence(std::memory_order_release);
+
             m_FreePtrSet.emplace(functionCxt.obj.offset, functionCxt.obj.size);
+//            m_WritingSet.erase(write_offset);
 
             return std::move(result);
         }
@@ -263,17 +309,22 @@ public:
         if (!memCxt.size)
             return false;
 
-        write_pos[std::this_thread::get_id()].push_back(memCxt.offset);
+        m_Remaining.fetch_add(1);
 
         new(align<Callable>(m_Memory + memCxt.offset)) Callable{std::forward<T>(function)};
-        m_ReadFunctions.push(
-                {static_cast<uint32_t>(reinterpret_cast<uintptr_t>(&invoke<Callable> ) - fp_base), memCxt});
 
-        m_Remaining.fetch_add(1, std::memory_order_release);
-        m_RemainingRead.fetch_add(1, std::memory_order_release);
+        m_ReadFunctions.push(
+                {static_cast<uint32_t>(reinterpret_cast<uintptr_t>(&invoke < Callable > ) - fp_base), memCxt});
+
+        m_RemainingRead.fetch_add(1);
+
+        if (!m_Writing.fetch_sub(1)) {
+            std::cout << "error :" << std::endl;
+        }
 
         return true;
     }
+
 };
 
-#endif //FUNCTIONQUEUE_CONCURRENTFUNCTIONQUEUE_H
+#endif //FUNCTIONQUEUE_ConcurrentFunctionQueue_H

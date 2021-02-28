@@ -12,32 +12,11 @@ using ComputeFunctionSig = size_t(size_t);
 using LockFreeQueue = ConcurrentFunctionQueue</*true, true,*/ ComputeFunctionSig>;
 
 int main(int argc, char **argv) {
-    [] {
-        struct MemCxt {
-            uint32_t offset/*: 23*/ {};
-            uint32_t size/*: 9*/ {};
-        };
+    if (argc == 1) {
+        println("usage : ./fq_test_nr_nw <buffer_size> <seed> <functions> <threads>");
+    }
 
-        struct FunctionCxt {
-            uint32_t fp_offset{};
-            MemCxt obj{};
-        };
-
-        struct MemPos {
-            uint64_t offset: 56;
-            uint8_t hash: 8;
-        };
-
-        println(sizeof(MemCxt), " ", alignof(MemCxt));
-        println(sizeof(FunctionCxt), " ", alignof(FunctionCxt));
-        println(sizeof(MemPos), " ", alignof(MemPos));
-        println(sizeof(std::atomic<MemPos>), " ", alignof(std::atomic<MemPos>), " ",
-                std::atomic<MemPos>::is_always_lock_free);
-    }();
-
-    size_t const rawQueueMemSize =
-            [&] { return (argc >= 2) ? atof(argv[1]) : 500 / 1024.0 / 1024.0; }() * 1024 * 1024;
-
+    size_t const rawQueueMemSize = [&] { return (argc >= 2) ? atof(argv[1]) : 10; }() * 1024 * 1024;
     auto const rawQueueMem = std::make_unique<uint8_t[]>(rawQueueMemSize + 10);
     println("using buffer of size :", rawQueueMemSize);
 
@@ -47,7 +26,7 @@ int main(int argc, char **argv) {
     size_t const functions = [&] { return (argc >= 4) ? atol(argv[3]) : 12639182; }();
     println("total functions :", functions);
 
-    size_t const num_threads = [&] { return (argc >= 5) ? atol(argv[4]) : 3/*std::thread::hardware_concurrency()*/; }();
+    size_t const num_threads = [&] { return (argc >= 5) ? atol(argv[4]) : std::thread::hardware_concurrency(); }();
     println("total num_threads :", num_threads);
 
     LockFreeQueue rawComputeQueue{rawQueueMem.get(), rawQueueMemSize};
@@ -79,7 +58,7 @@ int main(int argc, char **argv) {
         while (threads) {
             while (!rawComputeQueue) std::this_thread::yield();
             auto const res = rawComputeQueue.callAndPop(seed);
-//            printf("%lu\n", res);
+//            std::cout << res << '\n';
             if (res == std::numeric_limits<size_t>::max()) --threads;
             else result_vector.push_back(res);
         }
