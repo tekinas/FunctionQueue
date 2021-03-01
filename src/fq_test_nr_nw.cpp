@@ -11,8 +11,6 @@ using namespace util;
 using ComputeFunctionSig = void();
 using LockFreeQueue = ConcurrentFunctionQueue</*true, true, */ComputeFunctionSig>;
 
-void test_lockFreeQueue(LockFreeQueue &rawComputeQueue, CallbackGenerator &callbackGenerator, size_t functions);
-
 struct ComputeCxt {
 private:
     size_t num{};
