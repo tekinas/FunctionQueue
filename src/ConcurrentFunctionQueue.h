@@ -22,6 +22,13 @@ private:
     struct MemCxt {
         uint32_t offset: 24 {};
         uint32_t size: 8 {};
+
+        MemCxt() noexcept = default;
+
+        inline void set(std::byte *base, std::byte *mem, std::byte *obj_mem, size_t s) noexcept {
+            offset = static_cast<uint32_t>(mem - base);
+            size = static_cast<uint32_t>(obj_mem - mem + s);
+        }
     };
 
     struct FunctionCxt {
@@ -114,22 +121,28 @@ private:
 
     template<typename Callable>
     MemCxt getCallableStorage() noexcept {
-        auto getAlignedStorage = [](void *buffer, size_t size) noexcept {
-            return static_cast<std::byte *>(align<Callable>(buffer, size));
+        auto getAlignedStorage = [](void *ptr, size_t space) noexcept -> std::byte * {
+            const auto intptr = reinterpret_cast<uintptr_t>(ptr);
+            const auto aligned = (intptr - 1u + alignof(Callable)) & -alignof(Callable);
+            const auto diff = aligned - intptr;
+            if ((sizeof(Callable) + diff) > space)
+                return nullptr;
+            else
+                return reinterpret_cast<std::byte *>(aligned);
         };
 
         MemCxt memCxt;
         MemPos input_mem = m_InputPos.load(std::memory_order_acquire);
 
         bool search_ahead;
-        m_Writing.fetch_add(1, std::memory_order_release);
+        m_Writing.fetch_add(1, std::memory_order_relaxed);
 
         do {
+            m_Writing.fetch_sub(1, std::memory_order_relaxed);
+
             memCxt = {};
             auto const[out_pos, rem] = checkNAdvanceOutPos();
             auto const input_pos = input_mem.memory(m_Memory);
-
-            m_Writing.fetch_sub(1, std::memory_order_release);
 
             if (out_pos == input_pos) {
                 if (rem || m_Writing.load(std::memory_order_acquire))
@@ -141,9 +154,8 @@ private:
             if (size_t const buffer_size = m_Memory + m_MemorySize - input_pos; search_ahead && buffer_size) {
                 if (auto obj_buff = getAlignedStorage(input_pos, buffer_size)) {
                     search_ahead = false;
-                    memCxt = {.offset = static_cast<uint32_t>(std::distance(m_Memory, input_pos)),
-                            .size = static_cast<uint32_t>(std::distance(input_pos, obj_buff + sizeof(Callable)))};
-                    m_Writing.fetch_add(1);
+                    memCxt.set(m_Memory, input_pos, obj_buff, sizeof(Callable));
+                    m_Writing.fetch_add(1, std::memory_order_release);
                     continue;
                 }
             }
@@ -152,15 +164,12 @@ private:
                 auto const mem = search_ahead ? m_Memory : input_pos;
                 if (size_t const buffer_size = out_pos - mem) {
                     if (auto obj_buff = getAlignedStorage(mem, buffer_size)) {
-                        memCxt = {.offset = static_cast<uint32_t>(std::distance(m_Memory, mem)),
-                                .size = static_cast<uint32_t>(std::distance(mem, obj_buff + sizeof(Callable)))};
-
+                        memCxt.set(m_Memory, mem, obj_buff, sizeof(Callable));
                     }
                 }
             }
 
             if (!memCxt.size) return {};
-
             m_Writing.fetch_add(1, std::memory_order_release);
 
         } while (!m_InputPos.compare_exchange_weak(input_mem, input_mem.getNext(memCxt.offset + memCxt.size),
@@ -178,7 +187,7 @@ private:
         auto const out_pos = m_OutPosFollow.load(std::memory_order_acquire);
         auto const rem = m_Remaining.load(std::memory_order_relaxed);
 
-        if (!rem || outPosUpdateFlag.test_and_set(std::memory_order_acquire))
+        if (!rem /*|| m_FreePtrSet.empty()*/ || outPosUpdateFlag.test_and_set(std::memory_order_acquire))
             return {out_pos, rem};
         else {
 

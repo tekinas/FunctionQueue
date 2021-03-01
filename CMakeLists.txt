@@ -5,7 +5,7 @@ project(FunctionQueue)
 set(CMAKE_CXX_STANDARD 20)
 
 add_subdirectory(abseil-cpp)
-link_libraries(absl::flat_hash_map)
+link_libraries(absl::flat_hash_map tcmalloc)
 
 add_executable(fq_test_call_only src/fq_test_call_only.cpp)
 add_executable(fq_test_callNDelete src/fq_test_callNDelete.cpp)
