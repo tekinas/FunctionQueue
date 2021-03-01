@@ -61,11 +61,11 @@ int main(int argc, char **argv) {
     size_t const functions = [&] { return (argc >= 4) ? atol(argv[3]) : 12639182; }();
     println("total functions :", functions);
 
-    size_t const num_threads = [&] { return (argc >= 5) ? atol(argv[4]) : 8/*std::thread::hardware_concurrency()*/; }();
+    size_t const num_threads = [&] { return (argc >= 5) ? atol(argv[4]) : std::thread::hardware_concurrency(); }();
     println("total num_threads :", num_threads);
 
     size_t const compute_chains = [&] {
-        return (argc >= 6) ? atol(argv[5]) : 2/*std::thread::hardware_concurrency()*/;
+        return (argc >= 6) ? atol(argv[5]) : std::thread::hardware_concurrency();
     }();
     println("total compute chains :", compute_chains);
 

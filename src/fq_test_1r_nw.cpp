@@ -31,9 +31,7 @@ int main(int argc, char **argv) {
 
     LockFreeQueue rawComputeQueue{rawQueueMem.get(), rawQueueMemSize};
 
-    std::vector<size_t> result_vector;
     std::vector<std::thread> writer_threads;
-
     for (auto t = num_threads; t--;)
         writer_threads.emplace_back([=, &rawComputeQueue] {
             auto func = functions;
@@ -51,6 +49,8 @@ int main(int argc, char **argv) {
             while (!rawComputeQueue.push_back([](auto) { return std::numeric_limits<size_t>::max(); }));
         });
 
+    std::vector<size_t> result_vector;
+    result_vector.reserve(num_threads * functions);
     {
         Timer timer{"reader thread "};
         auto threads = num_threads;

@@ -143,9 +143,6 @@ private:
             if (out_pos == input_pos) {
                 if (rem || m_Writing.load())
                     return {};
-                else {
-//                    std::cout << "writing : " << m_WritingSet.size() << std::endl;
-                }
             }
 
             search_ahead = input_pos >= out_pos;
@@ -272,7 +269,7 @@ public:
     inline R callAndPop(Args ... args) noexcept {
         FunctionCxt functionCxt;
 
-        while (m_ReadFunctions.empty());
+        while (m_ReadFunctions.empty()) std::this_thread::yield();
         m_ReadFunctions.pop(functionCxt);
 
         /*tbb::concurrent_hash_map<uint32_t, uint32_t>::accessor write_offset;
@@ -283,6 +280,7 @@ public:
         if constexpr (std::is_same_v<R, void>) {
             reinterpret_cast<InvokeAndDestroy>(fp_base + functionCxt.fp_offset)(m_Memory + functionCxt.obj.offset,
                                                                                 args...);
+            std::atomic_thread_fence(std::memory_order_release);
 
             m_FreePtrSet.emplace(functionCxt.obj.offset, functionCxt.obj.size);
 //            m_WritingSet.erase(write_offset);
@@ -318,9 +316,7 @@ public:
 
         m_RemainingRead.fetch_add(1);
 
-        if (!m_Writing.fetch_sub(1)) {
-            std::cout << "error :" << std::endl;
-        }
+        m_Writing.fetch_sub(1);
 
         return true;
     }
