@@ -119,20 +119,20 @@ private:
         };
 
         MemCxt memCxt;
-        MemPos input_mem = m_InputPos.load();;
+        MemPos input_mem = m_InputPos.load(std::memory_order_acquire);
 
         bool search_ahead;
-        m_Writing.fetch_add(1);
+        m_Writing.fetch_add(1, std::memory_order_release);
 
         do {
             memCxt = {};
             auto const[out_pos, rem] = checkNAdvanceOutPos();
             auto const input_pos = input_mem.memory(m_Memory);
 
-            m_Writing.fetch_sub(1);
+            m_Writing.fetch_sub(1, std::memory_order_release);
 
             if (out_pos == input_pos) {
-                if (rem || m_Writing.load())
+                if (rem || m_Writing.load(std::memory_order_acquire))
                     return {};
             }
 
@@ -161,9 +161,10 @@ private:
 
             if (!memCxt.size) return {};
 
-            m_Writing.fetch_add(1);
+            m_Writing.fetch_add(1, std::memory_order_release);
 
-        } while (!m_InputPos.compare_exchange_weak(input_mem, input_mem.getNext(memCxt.offset + memCxt.size)));
+        } while (!m_InputPos.compare_exchange_weak(input_mem, input_mem.getNext(memCxt.offset + memCxt.size),
+                                                   std::memory_order_release, std::memory_order_acquire));
 
         if (search_ahead) {
             m_FreePtrSet.emplace(std::distance(m_Memory, input_mem.memory(m_Memory)), 0);
@@ -174,14 +175,14 @@ private:
 
     std::pair<std::byte *, size_t> checkNAdvanceOutPos() noexcept {
 
-        auto const out_pos = m_OutPosFollow.load();
-        auto const rem = m_Remaining.load();
+        auto const out_pos = m_OutPosFollow.load(std::memory_order_acquire);
+        auto const rem = m_Remaining.load(std::memory_order_relaxed);
 
-        if (!rem || outPosUpdateFlag.test_and_set())
+        if (!rem || outPosUpdateFlag.test_and_set(std::memory_order_acquire))
             return {out_pos, rem};
         else {
 
-            uint32_t output_offset = std::distance(m_Memory, m_OutPosFollow.load());
+            uint32_t output_offset = std::distance(m_Memory, m_OutPosFollow.load(std::memory_order_acquire));
 
             auto cleaned = 0;
             while (!m_FreePtrSet.empty()) {
@@ -199,11 +200,12 @@ private:
                 m_FreePtrSet.erase(stride_iter);
             }
 
-            auto const new_rem = (cleaned) ? m_Remaining.fetch_sub(cleaned) - cleaned : m_Remaining.load();
+            auto const new_rem = (cleaned) ? m_Remaining.fetch_sub(cleaned, std::memory_order_relaxed) - cleaned
+                                           : m_Remaining.load(std::memory_order_relaxed);
             auto const next_out_pos = m_Memory + output_offset;
-            m_OutPosFollow.store(next_out_pos);
+            m_OutPosFollow.store(next_out_pos, std::memory_order_release);
 
-            outPosUpdateFlag.clear();
+            outPosUpdateFlag.clear(std::memory_order_release);
 
             return {next_out_pos, new_rem};
         }
@@ -216,17 +218,16 @@ public:
                                                       m_RemainingRead{0}, m_Remaining{0}, m_ReadFunctions{1000},
                                                       m_InputPos{} {
         m_OutPosFollow = m_Memory;
-        printf("init input :%u\n", std::distance(m_Memory, m_InputPos.load().memory(m_Memory)));
-        printf("init output :%u\n", std::distance(m_Memory, m_OutPosFollow.load()));
 
         memset(m_Memory, 0, m_MemorySize);
     }
 
     explicit operator bool() {
-        size_t rem = m_RemainingRead.load();
+        size_t rem = m_RemainingRead.load(std::memory_order_relaxed);
         if (!rem) return false;
 
-        while (rem && !m_RemainingRead.compare_exchange_weak(rem, rem - 1));
+        while (rem && !m_RemainingRead.compare_exchange_weak(rem, rem - 1, std::memory_order_acquire,
+                                                             std::memory_order_relaxed));
         return rem;
     }
 
@@ -261,16 +262,16 @@ public:
         if (!memCxt.size)
             return false;
 
-        m_Remaining.fetch_add(1);
+        m_Remaining.fetch_add(1, std::memory_order_release);
 
-        new(align<Callable>(m_Memory + memCxt.offset)) Callable{std::forward<T>(function)};
+        std::construct_at(align<Callable>(m_Memory + memCxt.offset), std::forward<T>(function));
 
         m_ReadFunctions.push(
                 {static_cast<uint32_t>(reinterpret_cast<uintptr_t>(&invoke<Callable> ) - fp_base), memCxt});
 
-        m_RemainingRead.fetch_add(1);
+        m_RemainingRead.fetch_add(1, std::memory_order_release);
 
-        m_Writing.fetch_sub(1);
+        m_Writing.fetch_sub(1, std::memory_order_release);
 
         return true;
     }

@@ -81,15 +81,7 @@
   <component name="ChangeListManager">
     <list default="true" id="208b6fd8-6760-4f44-bd15-2f487cfe8997" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bin/linux/clang/fq_test_1r_nw" beforeDir="false" afterPath="$PROJECT_DIR$/bin/linux/clang/fq_test_1r_nw" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bin/linux/clang/fq_test_nr_1w" beforeDir="false" afterPath="$PROJECT_DIR$/bin/linux/clang/fq_test_nr_1w" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bin/linux/clang/fq_test_nr_nw" beforeDir="false" afterPath="$PROJECT_DIR$/bin/linux/clang/fq_test_nr_nw" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bin/linux/gcc/fq_test_1r_nw" beforeDir="false" afterPath="$PROJECT_DIR$/bin/linux/gcc/fq_test_1r_nw" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bin/linux/gcc/fq_test_nr_1w" beforeDir="false" afterPath="$PROJECT_DIR$/bin/linux/gcc/fq_test_nr_1w" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bin/linux/gcc/fq_test_nr_nw" beforeDir="false" afterPath="$PROJECT_DIR$/bin/linux/gcc/fq_test_nr_nw" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/ConcurrentFunctionQueue.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/ConcurrentFunctionQueue.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/fq_test_mr_mw.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/fq_test_mr_mw.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/fq_test_nr_nw.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/fq_test_nr_nw.cpp" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -130,11 +122,6 @@
     <property name="settings.editor.selected.configurable" value="CPPToolchains" />
   </component>
   <component name="RunManager" selected="CMake Application.fq_test_1r_nw">
-    <configuration default="true" type="CLionExternalRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" PASS_PARENT_ENVS_2="true">
-      <method v="2">
-        <option name="CLION.EXTERNAL.BUILD" enabled="true" />
-      </method>
-    </configuration>
     <configuration default="true" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" PASS_PARENT_ENVS_2="true">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
@@ -480,6 +467,11 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
+    <configuration default="true" type="GradleAppRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" PASS_PARENT_ENVS_2="true">
+      <method v="2">
+        <option name="com.jetbrains.cidr.cpp.gradle.execution.GradleNativeBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
     <list>
       <item itemvalue="CMake Application.fq_test_1r_1w" />
       <item itemvalue="CMake Application.fq_test_1r_nw" />
@@ -606,6 +598,7 @@
       <workItem from="1614572133972" duration="1578000" />
       <workItem from="1614585720195" duration="7834000" />
       <workItem from="1614594641830" duration="474000" />
+      <workItem from="1614596778115" duration="2877000" />
     </task>
     <servers />
   </component>
