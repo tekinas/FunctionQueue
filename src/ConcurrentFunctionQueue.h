@@ -105,20 +105,6 @@ private:
         return reinterpret_cast<T *>((reinterpret_cast<uintptr_t>(ptr) - 1u + alignof(T)) & -alignof(T));
     }
 
-    template<typename T>
-    static inline void *
-    align(void *&ptr, size_t &space) noexcept {
-        const auto intptr = reinterpret_cast<uintptr_t>(ptr);
-        const auto aligned = (intptr - 1u + alignof(T)) & -alignof(T);
-        const auto diff = aligned - intptr;
-        if ((sizeof(T) + diff) > space)
-            return nullptr;
-        else {
-            space -= diff;
-            return ptr = reinterpret_cast<void *>(aligned);
-        }
-    }
-
     template<typename Callable>
     MemCxt getCallableStorage() noexcept {
         auto getAlignedStorage = [](void *ptr, size_t space) noexcept -> std::byte * {
