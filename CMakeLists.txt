@@ -5,7 +5,7 @@ project(FunctionQueue)
 set(CMAKE_CXX_STANDARD 20)
 
 add_subdirectory(abseil-cpp)
-link_libraries(absl::flat_hash_map tcmalloc)
+link_libraries(absl::flat_hash_map tcmalloc pthread atomic tbb)
 
 add_executable(fq_test_call_only src/fq_test_call_only.cpp)
 add_executable(fq_test_callNDelete src/fq_test_callNDelete.cpp)
@@ -26,14 +26,3 @@ include_directories(${LIB_DIR}/include)
 
 #[[set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} -static)
 set(CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS} -static)]]
-
-if (MINGW OR UNIX)
-    target_link_libraries(fq_test_call_only PRIVATE pthread atomic)
-    target_link_libraries(fq_test_callNDelete PRIVATE pthread atomic)
-    target_link_libraries(fq_test_1r_1w PRIVATE pthread atomic)
-    target_link_libraries(fq_test_nr_nw PRIVATE pthread atomic tbb)
-    target_link_libraries(fq_test_nr_1w PRIVATE pthread atomic tbb)
-    target_link_libraries(fq_test_1r_nw PRIVATE pthread atomic tbb)
-    target_link_libraries(fq_test_sync_only PRIVATE pthread atomic)
-    target_link_libraries(fq_test_mr_mw PRIVATE pthread atomic tbb)
-endif ()

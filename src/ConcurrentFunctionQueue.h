@@ -127,7 +127,9 @@ private:
             m_Writing.fetch_sub(1, std::memory_order_relaxed);
 
             memCxt = {};
-            auto const[out_pos, rem] = checkNAdvanceOutPos();
+            auto const out_pos = m_OutPosFollow.load(std::memory_order_acquire);
+            auto const rem = m_Remaining.load(std::memory_order_relaxed);
+
             auto const input_pos = input_mem.memory(m_Memory);
 
             if (out_pos == input_pos) {
@@ -155,7 +157,10 @@ private:
                 }
             }
 
-            if (!memCxt.size) return {};
+            if (!memCxt.size) {
+//                cleanMemory();
+                return {};
+            }
             m_Writing.fetch_add(1, std::memory_order_release);
 
         } while (!m_InputPos.compare_exchange_weak(input_mem, input_mem.getNext(memCxt.offset + memCxt.size),
@@ -168,14 +173,8 @@ private:
         return memCxt;
     }
 
-    std::pair<std::byte *, size_t> checkNAdvanceOutPos() noexcept {
-
-        auto const out_pos = m_OutPosFollow.load(std::memory_order_acquire);
-        auto const rem = m_Remaining.load(std::memory_order_relaxed);
-
-        if (!rem /*|| m_FreePtrSet.empty()*/ || outPosUpdateFlag.test_and_set(std::memory_order_acquire))
-            return {out_pos, rem};
-        else {
+    void cleanMemory() noexcept {
+        if (!outPosUpdateFlag.test_and_set(std::memory_order_acquire)) {
 
             uint32_t output_offset = std::distance(m_Memory, m_OutPosFollow.load(std::memory_order_acquire));
 
@@ -195,15 +194,48 @@ private:
                 m_FreePtrSet.erase(stride_iter);
             }
 
-            auto const new_rem = (cleaned) ? m_Remaining.fetch_sub(cleaned, std::memory_order_relaxed) - cleaned
-                                           : m_Remaining.load(std::memory_order_relaxed);
+            if (cleaned) m_Remaining.fetch_sub(cleaned, std::memory_order_relaxed);
             auto const next_out_pos = m_Memory + output_offset;
             m_OutPosFollow.store(next_out_pos, std::memory_order_release);
 
             outPosUpdateFlag.clear(std::memory_order_release);
-
-            return {next_out_pos, new_rem};
         }
+    }
+
+    void cleanMemory(MemCxt lastMem) noexcept {
+        if (!outPosUpdateFlag.test_and_set(std::memory_order_acquire)) {
+
+            uint32_t output_offset = std::distance(m_Memory, m_OutPosFollow.load(std::memory_order_acquire));
+            auto cleaned = 0;
+
+            if (output_offset == lastMem.offset) {
+                ++cleaned;
+                output_offset += lastMem.size;
+            } else {
+                m_FreePtrSet.emplace(uint32_t{lastMem.offset}, uint32_t{lastMem.size});
+            }
+
+            while (!m_FreePtrSet.empty()) {
+                tbb::concurrent_hash_map<uint32_t, uint32_t>::accessor stride_iter;
+                bool found = m_FreePtrSet.find(stride_iter, output_offset);
+
+                if (!found) break;
+                else if (stride_iter->second) {
+                    output_offset += stride_iter->second;
+                    ++cleaned;
+                } else {
+                    output_offset = 0;
+                }
+
+                m_FreePtrSet.erase(stride_iter);
+            }
+
+            if (cleaned) m_Remaining.fetch_sub(cleaned, std::memory_order_relaxed);
+            auto const next_out_pos = m_Memory + output_offset;
+            m_OutPosFollow.store(next_out_pos, std::memory_order_release);
+
+            outPosUpdateFlag.clear(std::memory_order_release);
+        } else { m_FreePtrSet.emplace(uint32_t{lastMem.offset}, uint32_t{lastMem.size}); }
     }
 
 
@@ -236,13 +268,13 @@ public:
             reinterpret_cast<InvokeAndDestroy>(fp_base + functionCxt.fp_offset)(m_Memory + functionCxt.obj.offset,
                                                                                 args...);
 
-            m_FreePtrSet.emplace(uint32_t{functionCxt.obj.offset}, uint32_t{functionCxt.obj.size});
+            cleanMemory(functionCxt.obj);
 
         } else {
             auto &&result = reinterpret_cast<InvokeAndDestroy>(fp_base + functionCxt.fp_offset)(
                     m_Memory + functionCxt.obj.offset, args...);
 
-            m_FreePtrSet.emplace(uint32_t{functionCxt.obj.offset}, uint32_t{functionCxt.obj.size});
+            cleanMemory(functionCxt.obj);
 
             return std::move(result);
         }
