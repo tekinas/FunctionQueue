@@ -20,8 +20,8 @@ template<typename R, typename ...Args>
 class ConcurrentFunctionQueue<R(Args...)> {
 private:
     struct MemCxt {
-        uint32_t offset: 24 {};
-        uint32_t size: 8 {};
+        uint32_t offset /*: 24*/ {};
+        uint32_t size /*: 8*/ {};
 
         MemCxt() noexcept = default;
 
@@ -38,10 +38,10 @@ private:
 
     struct MemPos {
     private:
-        uint32_t hash{};
-        uint32_t offset{};
+        uint32_t hash;
+        uint32_t offset;
 
-        MemPos(uint32_t hash, uint32_t offset) : hash{hash}, offset{offset} {}
+        MemPos(size_t hash, uint32_t offset) : hash{static_cast<uint32_t>(hash)}, offset{offset} {}
 
     public:
         MemPos() noexcept = default;
@@ -52,7 +52,7 @@ private:
         }
 
         MemPos getNext(uint32_t next_offset) const noexcept {
-            return {static_cast<uint32_t>(absl::Hash<MemPos>{}(*this)), next_offset};
+            return {absl::Hash<MemPos>{}(*this), next_offset};
         }
 
         std::byte *memory(std::byte *base) const noexcept {
@@ -133,8 +133,10 @@ private:
             auto const input_pos = input_mem.memory(m_Memory);
 
             if (out_pos == input_pos) {
-                if (rem || m_Writing.load(std::memory_order_acquire))
+                if (rem || m_Writing.load(std::memory_order_acquire)) {
+                    cleanMemory();
                     return {};
+                }
             }
 
             search_ahead = input_pos >= out_pos;
@@ -158,16 +160,21 @@ private:
             }
 
             if (!memCxt.size) {
-//                cleanMemory();
+                cleanMemory();
                 return {};
             }
+
             m_Writing.fetch_add(1, std::memory_order_release);
 
         } while (!m_InputPos.compare_exchange_weak(input_mem, input_mem.getNext(memCxt.offset + memCxt.size),
                                                    std::memory_order_release, std::memory_order_acquire));
 
         if (search_ahead) {
-            m_FreePtrSet.emplace(std::distance(m_Memory, input_mem.memory(m_Memory)), 0);
+            if (m_OutPosFollow.load(std::memory_order_relaxed) == input_mem.memory(m_Memory) &&
+                !outPosUpdateFlag.test_and_set(std::memory_order_acquire)) {
+                m_OutPosFollow.store(m_Memory, std::memory_order_release);
+                outPosUpdateFlag.clear(std::memory_order_release);
+            } else m_FreePtrSet.emplace(std::distance(m_Memory, input_mem.memory(m_Memory)), 0);
         }
 
         return memCxt;
@@ -202,17 +209,17 @@ private:
         }
     }
 
-    void cleanMemory(MemCxt lastMem) noexcept {
+    void cleanMemory(MemCxt freeMem) noexcept {
         if (!outPosUpdateFlag.test_and_set(std::memory_order_acquire)) {
 
             uint32_t output_offset = std::distance(m_Memory, m_OutPosFollow.load(std::memory_order_acquire));
             auto cleaned = 0;
 
-            if (output_offset == lastMem.offset) {
+            if (output_offset == freeMem.offset) {
                 ++cleaned;
-                output_offset += lastMem.size;
+                output_offset += freeMem.size;
             } else {
-                m_FreePtrSet.emplace(uint32_t{lastMem.offset}, uint32_t{lastMem.size});
+                m_FreePtrSet.emplace(uint32_t{freeMem.offset}, uint32_t{freeMem.size});
             }
 
             while (!m_FreePtrSet.empty()) {
@@ -235,9 +242,10 @@ private:
             m_OutPosFollow.store(next_out_pos, std::memory_order_release);
 
             outPosUpdateFlag.clear(std::memory_order_release);
-        } else { m_FreePtrSet.emplace(uint32_t{lastMem.offset}, uint32_t{lastMem.size}); }
+        } else {
+            m_FreePtrSet.emplace(uint32_t{freeMem.offset}, uint32_t{freeMem.size});
+        }
     }
-
 
 public:
 
@@ -294,7 +302,7 @@ public:
         std::construct_at(align<Callable>(m_Memory + memCxt.offset), std::forward<T>(function));
 
         m_ReadFunctions.push(
-                {static_cast<uint32_t>(reinterpret_cast<uintptr_t>(&invoke<Callable> ) - fp_base), memCxt});
+                {static_cast<uint32_t>(reinterpret_cast<uintptr_t>(&invoke < Callable > ) - fp_base), memCxt});
 
         m_RemainingRead.fetch_add(1, std::memory_order_release);
 

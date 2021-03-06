@@ -1,6 +1,6 @@
 #include <thread>
 
-#include "ConcurrentFunctionQueue.h"
+#include "FunctionQueue.h"
 #include "util.h"
 #include "ComputeCallbackGenerator.h"
 
@@ -8,7 +8,7 @@
 using namespace util;
 
 using ComputeFunctionSig = size_t(size_t);
-using LockFreeQueue = ConcurrentFunctionQueue</*true, true, */ComputeFunctionSig>;
+using LockFreeQueue = FunctionQueue<true, true, ComputeFunctionSig>;
 
 void test_lockFreeQueue(LockFreeQueue &rawComputeQueue, CallbackGenerator &callbackGenerator, size_t functions);
 
