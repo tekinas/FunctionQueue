@@ -1,7 +1,7 @@
 #include <thread>
 #include <string>
 
-#include "ConcurrentFunctionQueue.h"
+#include <boost/asio.hpp>
 #include "util.h"
 #include "ComputeCallbackGenerator.h"
 
@@ -9,7 +9,7 @@
 using namespace util;
 
 using ComputeFunctionSig = void();
-using LockFreeQueue = ConcurrentFunctionQueue</*true, true, */ComputeFunctionSig>;
+using LockFreeQueue = boost::asio::io_context;
 
 struct ComputeCxt {
 private:
@@ -37,21 +37,15 @@ public:
                         else println("result :", computeCxt->num);
                     };
 
-                    while (!functionQueue->push_back(std::move(compute))) {
-                        std::this_thread::yield();
-                    }
+                    boost::asio::post(*functionQueue, std::move(compute));
                 });
     }
 };
 
 int main(int argc, char **argv) {
     if (argc == 1) {
-        println("usage : ./fq_test_nr_nw <buffer_size> <seed> <functions> <threads> <compute_chains>");
+        println("usage : ./fq_test_nr_nw_asio <buffer_size> <seed> <functions> <threads> <compute_chains>");
     }
-
-    size_t const rawQueueMemSize = [&] { return (argc >= 2) ? atof(argv[1]) : 5; }() * 1024 * 1024;
-    auto const rawQueueMem = std::make_unique<uint8_t[]>(rawQueueMemSize + 10);
-    println("using buffer of size :", rawQueueMemSize);
 
     size_t const seed = [&] { return (argc >= 3) ? atol(argv[2]) : 100; }();
     println("using seed :", seed);
@@ -67,7 +61,7 @@ int main(int argc, char **argv) {
     }();
     println("total compute chains :", compute_chains);
 
-    LockFreeQueue rawComputeQueue{rawQueueMem.get(), rawQueueMemSize};
+    LockFreeQueue rawComputeQueue;
 
     for (auto t = compute_chains; t--;)
         ComputeCxt::addComputeTask(
@@ -77,7 +71,7 @@ int main(int argc, char **argv) {
     std::vector<std::thread> threads;
     for (auto t = num_threads; t--;)
         threads.emplace_back([&rawComputeQueue] {
-            while (rawComputeQueue) rawComputeQueue.callAndPop();
+            rawComputeQueue.run();
         });
 
     for (auto &&t:threads)
